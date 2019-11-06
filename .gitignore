@@ -5,3 +5,7 @@ output
 env
 *.pt
 .idea
+*.jar
+*.gz
+**/*.pyc
+meteor*

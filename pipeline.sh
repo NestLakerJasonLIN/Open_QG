@@ -4,6 +4,7 @@ set -e
 
 install_requirements(){
     pip install -r requirements.txt
+    pip2.7 install numpy==1.14.0
 }
 
 load_dataset(){
