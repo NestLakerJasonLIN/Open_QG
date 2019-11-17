@@ -83,6 +83,9 @@ class Encoder(nn.Module):
             weights = self.utils.init_embeddings(self.vocab)
             self.word_embedding_encoder = nn.Embedding.from_pretrained(weights, freeze=self.params.train_embeddings)
 
+        # Project [bs, in_sl, d_model+1] => [bs, in_sl, d_model]. The additional bit is used to store answer indicator
+        self.merge_ans_layer = nn.Linear(self.params.d_model+1, self.params.d_model)
+
         # 多个相同子结构组成的encoder子层,层数为num_layers
         self.encoder_layers = nn.ModuleList([Encoder_layer(self.params) for _ in range(self.params.num_layers)])
 
@@ -109,7 +112,10 @@ class Encoder(nn.Module):
 
         # 如果有答案信息,就转换为词向量
         if torch.is_tensor(answer_indices):
-            input_indices += self.answer_embedding_encoder(answer_indices)
+            input_indices = torch.cat([input_indices, answer_indices.unsqueeze(-1).type(torch.FloatTensor)], dim=-1)
+            # input_indices += self.answer_embedding_encoder(answer_indices)
+
+        input_indices = self.merge_ans_layer(input_indices)
 
         # 经过多个相同子结构组成的decoder子层,层数为num_layers
         for encoder_layer in self.encoder_layers:
