@@ -112,8 +112,8 @@ class Encoder(nn.Module):
 
         # 如果有答案信息,就转换为词向量
         if torch.is_tensor(answer_indices):
-            input_indices = torch.cat([input_indices, answer_indices.unsqueeze(-1).type(torch.FloatTensor)], dim=-1)
-            # input_indices += self.answer_embedding_encoder(answer_indices)
+            input_indices = torch.cat([input_indices.to(self.params.device), answer_indices.unsqueeze(-1).type(torch.FloatTensor).to(self.params.device)], dim=-1).to(self.params.device)
+            #input_indices += self.answer_embedding_encoder(answer_indices)
 
         input_indices = self.merge_ans_layer(input_indices)
 
