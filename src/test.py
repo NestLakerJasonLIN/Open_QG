@@ -185,6 +185,11 @@ if __name__ == '__main__':
 
     logger.info("device: {}".format(params.device))
 
+    if (params.lexical_feature):
+        logger.info("Use lexical features")
+    else:
+        logger.info("Not use lexical features")
+
     if params.rnnsearch:
         from rnnsearch import Model
     else:

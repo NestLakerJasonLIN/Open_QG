@@ -295,10 +295,6 @@ if __name__ == '__main__':
     logger = logger()
     params = params()
 
-    if (params.lexical_feature):
-        logger.info("Use lexical features")
-    else:
-        logger.info("Not use lexical features")
     # 从已保存的pt文件中读取数据
     # 包括:vocab,训练集/验证集各自的输入/输出索引序列
     data = torch.load(params.temp_pt_file)
@@ -319,6 +315,11 @@ if __name__ == '__main__':
         params.device = torch.device('cpu')
 
     logger.info("device: {}".format(params.device))
+
+    if (params.lexical_feature):
+        logger.info("Use lexical features")
+    else:
+        logger.info("Not use lexical features")
 
     # params.num_epochs = 5
     # params.print_loss = True
