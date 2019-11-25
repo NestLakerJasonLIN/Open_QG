@@ -48,6 +48,8 @@ def params():
     parser.add_argument('--ner_sentence_file', type=str, default='ner_sentence.txt', help='NER tags for sentence')
     parser.add_argument('--pos_question_file', type=str, default='pos_question.txt', help='POS tags for question')
     parser.add_argument('--ner_question_file', type=str, default='ner_question.txt', help='NER tags for question')
+    parser.add_argument('--vocab_pos_file', type=str, default='vocab_pos.txt', help='pos vocab位置')
+    parser.add_argument('--vocab_ner_file', type=str, default='vocab_ner.txt', help='ner vocab位置')
 
     # 打印相关
     parser.add_argument('--print_params', type=bool, default=False, help='是否打印参数列表')
@@ -132,6 +134,8 @@ def params():
 
     params.embedding_file = os.path.join(params.origin_dir, params.embedding_file)
     params.vocab_file = os.path.join(params.main_data_dir, params.dataset_dir, params.vocab_file)
+    params.vocab_pos_file = os.path.join(params.main_data_dir, params.dataset_dir, params.vocab_pos_file)
+    params.vocab_ner_file = os.path.join(params.main_data_dir, params.dataset_dir, params.vocab_ner_file)
     params.temp_pt_file = os.path.join(params.main_data_dir, params.dataset_dir, params.temp_pt_file)
 
     params.checkpoint_dir = os.path.join(params.main_checkpoint_dir, params.dataset_dir)

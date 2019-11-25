@@ -235,10 +235,33 @@ if __name__ == '__main__':
         dev_answers = load_answer(params.dev_answer_start_file, params.dev_answer_end_file)
         test_answers = load_answer(params.test_answer_start_file, params.test_answer_end_file)
 
+    # preprocess pos for sentences/questions
+    train_pos_input_sentences = load_dataset(params, params.train_pos_sentence_file)
+    train_pos_output_sentences = load_dataset(params, params.train_pos_question_file)
+    dev_pos_input_sentences = load_dataset(params, params.dev_pos_sentence_file)
+    dev_pos_output_sentences = load_dataset(params, params.dev_pos_question_file)
+    test_pos_input_sentences = load_dataset(params, params.test_pos_sentence_file)
+    test_pos_output_sentences = load_dataset(params, params.test_pos_question_file)
+
+    # preprocess ner for sentences/questions
+    train_ner_input_sentences = load_dataset(params, params.train_ner_sentence_file)
+    train_ner_output_sentences = load_dataset(params, params.train_ner_question_file)
+    dev_ner_input_sentences = load_dataset(params, params.dev_ner_sentence_file)
+    dev_ner_output_sentences = load_dataset(params, params.dev_ner_question_file)
+    test_ner_input_sentences = load_dataset(params, params.test_ner_sentence_file)
+    test_ner_output_sentences = load_dataset(params, params.test_ner_question_file)
+
     # 断言:[句子/问题/答案]数量一致
-    assert len(train_input_sentences) == len(train_output_sentences) 
+    assert len(train_input_sentences) == len(train_output_sentences)
     assert len(dev_input_sentences) == len(dev_output_sentences)
     assert len(test_input_sentences) == len(test_output_sentences)
+    assert len(train_pos_input_sentences) == len(train_pos_output_sentences)
+    assert len(train_ner_input_sentences) == len(train_ner_output_sentences)
+    assert len(dev_pos_input_sentences) == len(dev_pos_output_sentences)
+    assert len(dev_ner_input_sentences) == len(dev_ner_output_sentences)
+    assert len(test_pos_input_sentences) == len(test_pos_output_sentences)
+    assert len(test_ner_input_sentences) == len(test_ner_output_sentences)
+
     if params.answer_embeddings:
         assert len(train_input_sentences) == len(train_answers)
         assert len(dev_input_sentences) == len(dev_answers)
@@ -247,27 +270,54 @@ if __name__ == '__main__':
     # 加载/构造vocab
     if params.load_vocab and os.path.exists(params.vocab_file):
         vocab = load_vocab(params, params.vocab_file)
+        vocab_pos = load_vocab(params, params.vocab_pos_file)
+        vocab_ner = load_vocab(params, params.vocab_ner_file)
     else:
         vocab = build_vocab(params, params.vocab_file,
                             train_input_sentences + \
                             train_output_sentences + \
                             dev_input_sentences + \
                             dev_output_sentences)
+        vocab_pos = build_vocab(params, params.vocab_pos_file,
+                            train_pos_input_sentences + \
+                            train_pos_output_sentences + \
+                            dev_pos_input_sentences + \
+                            dev_pos_output_sentences)
+        vocab_ner = build_vocab(params, params.vocab_ner_file,
+                            train_ner_input_sentences + \
+                            train_ner_output_sentences + \
+                            dev_ner_input_sentences + \
+                            dev_ner_output_sentences)
 
     # 将单词转化为index
+    logger.info('正在将数据中的单词转换为索引')
+
+    # TODO: ner/pos convert to index
     train_input_indices = convert_sentence2index(train_input_sentences, vocab)
     train_output_indices = convert_sentence2index(train_output_sentences, vocab)
     dev_input_indices = convert_sentence2index(dev_input_sentences, vocab)
     dev_output_indices = convert_sentence2index(dev_output_sentences, vocab)
     test_input_indices = convert_sentence2index(test_input_sentences, vocab)
     test_output_indices = convert_sentence2index(test_output_sentences, vocab)
-
-    logger.info('正在将数据中的单词转换为索引')
+    train_pos_input_indices = convert_sentence2index(train_pos_input_sentences, vocab_pos)
+    train_pos_output_indices = convert_sentence2index(train_pos_output_sentences, vocab_pos)
+    dev_pos_input_indices = convert_sentence2index(dev_pos_input_sentences, vocab_pos)
+    dev_pos_output_indices = convert_sentence2index(dev_pos_output_sentences, vocab_pos)
+    test_pos_input_indices = convert_sentence2index(test_pos_input_sentences, vocab_pos)
+    test_pos_output_indices = convert_sentence2index(test_pos_output_sentences, vocab_pos)
+    train_ner_input_indices = convert_sentence2index(train_ner_input_sentences, vocab_ner)
+    train_ner_output_indices = convert_sentence2index(train_ner_output_sentences, vocab_ner)
+    dev_ner_input_indices = convert_sentence2index(dev_ner_input_sentences, vocab_ner)
+    dev_ner_output_indices = convert_sentence2index(dev_ner_output_sentences, vocab_ner)
+    test_ner_input_indices = convert_sentence2index(test_ner_input_sentences, vocab_ner)
+    test_ner_output_indices = convert_sentence2index(test_ner_output_sentences, vocab_ner)
 
     # 构造数据,输出到临时的pt文件中
     data = {
         'params' : params,
         'vocab' : vocab,
+        'vocab_pos' : vocab_pos,
+        'vocab_ner' : vocab_ner,
         'train_input_indices' : train_input_indices,
         'train_output_indices' : train_output_indices,
         'train_answers' : train_answers,
@@ -277,6 +327,18 @@ if __name__ == '__main__':
         'test_input_indices' : test_input_indices,
         'test_output_indices' : test_output_indices,
         'test_answers' : test_answers,
+        'train_pos_input_indices' : train_pos_input_indices,
+        'train_pos_output_indices': train_pos_output_indices,
+        'train_ner_input_indices': train_ner_input_indices,
+        'train_ner_output_indices': train_ner_output_indices,
+        'dev_pos_input_indices' : dev_pos_input_indices,
+        'dev_pos_output_indices': dev_pos_output_indices,
+        'dev_ner_input_indices': dev_ner_input_indices,
+        'dev_ner_output_indices': dev_ner_output_indices,
+        'test_pos_input_indices': test_pos_input_indices,
+        'test_pos_output_indices': test_pos_output_indices,
+        'test_ner_input_indices': test_ner_input_indices,
+        'test_ner_output_indices': test_ner_output_indices,
     }
     torch.save(data, params.temp_pt_file)
 
