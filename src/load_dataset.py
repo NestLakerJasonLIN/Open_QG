@@ -14,7 +14,8 @@ from logger import logger
 from params import params
 
 
-def load_dataset(params, origin_file, sentence_file, question_file, answer_start_file, answer_end_file):
+def load_dataset(params, origin_file, sentence_file, question_file, answer_start_file, answer_end_file,
+                 pos_sentence_file, ner_sentence_file, pos_question_file, ner_question_file):
     '''
     作用:
     将json形式的原始文件中的[句子/问题/答案]三元组转换为txt形式
@@ -40,6 +41,10 @@ def load_dataset(params, origin_file, sentence_file, question_file, answer_start
     f_question = open(question_file, 'w')
     f_answer_start = open(answer_start_file, 'w')
     f_answer_end = open(answer_end_file, 'w')
+    f_pos_sentence = open(pos_sentence_file, 'w')
+    f_ner_sentence = open(ner_sentence_file, 'w')
+    f_pos_question = open(pos_question_file, 'w')
+    f_ner_question = open(ner_question_file, 'w')
 
     # 依次处理所有数据
     for instance in instances:
@@ -47,11 +52,19 @@ def load_dataset(params, origin_file, sentence_file, question_file, answer_start
         sentence = instance['annotation1']['toks'].strip().lower()
         question = instance['annotation2']['toks'].strip().lower()
         answer = instance['annotation3']['toks'].strip().lower()
+        pos_sentence = instance['annotation1']['POSs'].strip().lower()
+        ner_sentence = instance['annotation1']['NERs'].strip().lower()
+        pos_question = instance['annotation2']['POSs'].strip().lower()
+        ner_question = instance['annotation2']['NERs'].strip().lower()
 
         # 将str切分为list
         sentence = sentence.split()
         question = question.split()
         answer = answer.split()
+        pos_sentence = pos_sentence.split()
+        ner_sentence = ner_sentence.split()
+        pos_question = pos_question.split()
+        ner_question = ner_question.split()
 
         # 找到答案起止位置
         answer_start = 0
@@ -77,6 +90,10 @@ def load_dataset(params, origin_file, sentence_file, question_file, answer_start
             f_question.write(' '.join(question) + '\n')
             f_answer_start.write(str(answer_start) + '\n')
             f_answer_end.write(str(answer_end) + '\n')
+            f_pos_sentence.write(' '.join(pos_sentence) + '\n')
+            f_ner_sentence.write(' '.join(ner_sentence) + '\n')
+            f_pos_question.write(' '.join(pos_question) + '\n')
+            f_ner_question.write(' '.join(ner_question) + '\n')
             num += 1
 
     # 关闭所有文件
@@ -84,6 +101,10 @@ def load_dataset(params, origin_file, sentence_file, question_file, answer_start
     f_question.close()
     f_answer_start.close()
     f_answer_end.close()
+    f_pos_sentence.close()
+    f_ner_sentence.close()
+    f_pos_question.close()
+    f_ner_question.close()
 
     logger.info('从{}中加载原始数据{}, 其中成功加载数据{}'.format(origin_file, total, num))
 
@@ -193,16 +214,28 @@ if __name__ == '__main__':
                     params.train_sentence_file,
                     params.train_question_file,
                     params.train_answer_start_file,
-                    params.train_answer_end_file),
+                    params.train_answer_end_file,
+                    params.train_pos_sentence_file,
+                    params.train_ner_sentence_file,
+                    params.train_pos_question_file,
+                    params.train_ner_question_file)
         load_dataset(params,
                     params.origin_dev_file,
                     params.dev_sentence_file,
                     params.dev_question_file,
                     params.dev_answer_start_file,
-                    params.dev_answer_end_file)
+                    params.dev_answer_end_file,
+                    params.dev_pos_sentence_file,
+                    params.dev_ner_sentence_file,
+                    params.dev_pos_question_file,
+                    params.dev_ner_question_file)
         load_dataset(params,
                     params.origin_test_file,
                     params.test_sentence_file,
                     params.test_question_file,
                     params.test_answer_start_file,
-                    params.test_answer_end_file)
+                    params.test_answer_end_file,
+                    params.test_pos_sentence_file,
+                    params.test_ner_sentence_file,
+                    params.test_pos_question_file,
+                    params.test_ner_question_file)
