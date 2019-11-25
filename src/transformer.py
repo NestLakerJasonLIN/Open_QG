@@ -27,11 +27,15 @@ class Model(nn.Module):
         self.params = params
         self.vocab = vocab
         self.vocab_size = len(self.vocab)
-        self.vocab_pos = vocab_pos
-        self.vocab_pos_size = len(self.vocab_pos)
-        self.vocab_ner = vocab_ner
-        self.vocab_ner_size = len(self.vocab_ner)
-
+        if (self.params.lexical_feature):
+            assert vocab_pos and vocab_ner
+            self.vocab_pos = vocab_pos
+            self.vocab_pos_size = len(self.vocab_pos)
+            self.vocab_ner = vocab_ner
+            self.vocab_ner_size = len(self.vocab_ner)
+        else:
+            self.vocab_pos = None
+            self.vocab_ner = None
         self.encoder = Encoder(self.params, self.vocab, self.vocab_pos, self.vocab_ner)
         self.decoder = Decoder(self.params, self.vocab, self.vocab_pos, self.vocab_ner)
 
@@ -40,8 +44,9 @@ class Model(nn.Module):
             self.decoder.word_embedding_decoder = self.encoder.word_embedding_encoder
             self.decoder.position_embedding_decoder = self.encoder.position_embedding_encoder
             self.decoder.output.weight = self.decoder.word_embedding_decoder.weight
-            self.decoder.pos_embedding_decoder = self.encoder.pos_embedding_encoder
-            self.decoder.ner_embedding_decoder = self.encoder.ner_embedding_encoder
+            if (self.params.lexical_feature):
+                self.decoder.pos_embedding_decoder = self.encoder.pos_embedding_encoder
+                self.decoder.ner_embedding_decoder = self.encoder.ner_embedding_encoder
 
     def forward(self, input_indices, output_indices,
                 pos_input_indices=None, pos_output_indices=None,
@@ -78,10 +83,12 @@ class Encoder(nn.Module):
         self.params = params
         self.vocab = vocab
         self.vocab_size = len(self.vocab)
-        self.vocab_pos = vocab_pos
-        self.vocab_pos_size = len(self.vocab_pos)
-        self.vocab_ner = vocab_ner
-        self.vocab_ner_size = len(self.vocab_ner)
+        if (self.params.lexical_feature):
+            assert vocab_pos and vocab_ner
+            self.vocab_pos = vocab_pos
+            self.vocab_pos_size = len(self.vocab_pos)
+            self.vocab_ner = vocab_ner
+            self.vocab_ner_size = len(self.vocab_ner)
 
         # 构造掩膜和位置信息
         self.utils = Utils(self.params)
@@ -90,8 +97,9 @@ class Encoder(nn.Module):
         self.word_embedding_encoder = nn.Embedding(self.vocab_size, self.params.d_model)
         self.position_embedding_encoder = nn.Embedding(self.vocab_size, self.params.d_model)
         self.answer_embedding_encoder = nn.Embedding(2, self.params.d_model)
-        self.pos_embedding_encoder = nn.Embedding(self.vocab_pos_size, self.params.d_model)
-        self.ner_embedding_encoder = nn.Embedding(self.vocab_ner_size, self.params.d_model)
+        if (self.params.lexical_feature):
+            self.pos_embedding_encoder = nn.Embedding(self.vocab_pos_size, self.params.d_model)
+            self.ner_embedding_encoder = nn.Embedding(self.vocab_ner_size, self.params.d_model)
 
         # 如果有预训练的词向量,则使用预训练的词向量进行权重初始化
         if self.params.load_embeddings:
@@ -123,7 +131,9 @@ class Encoder(nn.Module):
         # input_indices: [batch_size, input_seq_len, d_model]
 
         # add embedded pos/ner lexical features
-        input_indices += self.pos_embedding_encoder(pos_input_indices) + self.ner_embedding_encoder(ner_input_indices)
+        if (self.params.lexical_feature):
+            input_indices += self.pos_embedding_encoder(pos_input_indices) + \
+                             self.ner_embedding_encoder(ner_input_indices)
 
         # 如果有答案信息,就转换为词向量
         if torch.is_tensor(answer_indices):
@@ -153,10 +163,12 @@ class Decoder(nn.Module):
         self.params = params
         self.vocab = vocab
         self.vocab_size = len(self.vocab)
-        self.vocab_pos = vocab_pos
-        self.vocab_pos_size = len(self.vocab_pos)
-        self.vocab_ner = vocab_ner
-        self.vocab_ner_size = len(self.vocab_ner)
+        if (self.params.lexical_feature):
+            assert vocab_pos and vocab_ner
+            self.vocab_pos = vocab_pos
+            self.vocab_pos_size = len(self.vocab_pos)
+            self.vocab_ner = vocab_ner
+            self.vocab_ner_size = len(self.vocab_ner)
 
         # 构造掩膜和位置信息
         self.utils = Utils(self.params)
@@ -164,8 +176,9 @@ class Decoder(nn.Module):
         # embedding层,将索引/位置信息转换为词向量
         self.word_embedding_decoder = nn.Embedding(self.vocab_size, self.params.d_model)
         self.position_embedding_decoder = nn.Embedding(self.vocab_size, self.params.d_model)
-        self.pos_embedding_decoder = nn.Embedding(self.vocab_pos_size, self.params.d_model)
-        self.ner_embedding_decoder = nn.Embedding(self.vocab_ner_size, self.params.d_model)
+        if (self.params.lexical_feature):
+            self.pos_embedding_decoder = nn.Embedding(self.vocab_pos_size, self.params.d_model)
+            self.ner_embedding_decoder = nn.Embedding(self.vocab_ner_size, self.params.d_model)
 
         # 如果有预训练的词向量,则使用预训练的词向量进行权重初始化
         if self.params.load_embeddings:
@@ -207,7 +220,9 @@ class Decoder(nn.Module):
         # output_indices: [batch_size, output_seq_len, d_model]
 
         # add embedded pos/ner lexical features
-        output_indices += self.pos_embedding_decoder(pos_output_indices) + self.ner_embedding_decoder(ner_output_indices)
+        if (self.params.lexical_feature):
+            output_indices += self.pos_embedding_decoder(pos_output_indices) + \
+                              self.ner_embedding_decoder(ner_output_indices)
 
         # 经过多个相同子结构组成的decoder子层,层数为num_layers
         for decoder_layer in self.decoder_layers:

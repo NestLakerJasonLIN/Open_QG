@@ -91,6 +91,10 @@ def params():
     parser.add_argument('--d_ff', type=int, default=1024, help='transformer模型超参数:d_ff')
     parser.add_argument('--dropout', type=float, default=0.1, help='transformer模型超参数:dropout')
 
+    # lexical feature switch
+    parser.add_argument('--lexical_feature', dest='lexical_feature', action='store_true')
+    parser.set_defaults(lexical_feature=False)
+
     # 设定参数
     params = parser.parse_args()
 

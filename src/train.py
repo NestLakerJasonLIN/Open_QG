@@ -295,12 +295,20 @@ if __name__ == '__main__':
     logger = logger()
     params = params()
 
+    if (params.lexical_feature):
+        logger.info("Use lexical features")
+    else:
+        logger.info("Not use lexical features")
     # 从已保存的pt文件中读取数据
     # 包括:vocab,训练集/验证集各自的输入/输出索引序列
     data = torch.load(params.temp_pt_file)
     vocab = data['vocab']
-    vocab_pos = data['vocab_pos']
-    vocab_ner = data['vocab_ner']
+    if (params.lexical_feature):
+        vocab_pos = data['vocab_pos']
+        vocab_ner = data['vocab_ner']
+    else:
+        vocab_pos = None
+        vocab_ner = None
     params = data['params']
 
     if params.cuda and torch.cuda.is_available():
@@ -330,4 +338,4 @@ if __name__ == '__main__':
     train_loader, dev_loader = prepare_dataloaders(params, data)
 
     # 训练模型
-    train_model(params, vocab, train_loader, dev_loader, vocab_ner=vocab_ner, vocab_pos=vocab_pos)
+    train_model(params, vocab, train_loader, dev_loader, vocab_pos=vocab_pos, vocab_ner=vocab_ner)
