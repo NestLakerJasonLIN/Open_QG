@@ -299,12 +299,6 @@ if __name__ == '__main__':
     # 包括:vocab,训练集/验证集各自的输入/输出索引序列
     data = torch.load(params.temp_pt_file)
     vocab = data['vocab']
-    if (params.lexical_feature):
-        vocab_pos = data['vocab_pos']
-        vocab_ner = data['vocab_ner']
-    else:
-        vocab_pos = None
-        vocab_ner = None
     params = data['params']
 
     if params.cuda and torch.cuda.is_available():
@@ -316,10 +310,16 @@ if __name__ == '__main__':
 
     logger.info("device: {}".format(params.device))
 
+    params.lexical_feature = True
+
     if (params.lexical_feature):
         logger.info("Use lexical features")
+        vocab_pos = data['vocab_pos']
+        vocab_ner = data['vocab_ner']
     else:
         logger.info("Not use lexical features")
+        vocab_pos = None
+        vocab_ner = None
 
     # params.num_epochs = 5
     # params.print_loss = True

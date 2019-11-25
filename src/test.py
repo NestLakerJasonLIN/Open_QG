@@ -185,6 +185,8 @@ if __name__ == '__main__':
 
     logger.info("device: {}".format(params.device))
 
+    params.lexical_feature = True
+
     if (params.lexical_feature):
         logger.info("Use lexical features")
     else:
