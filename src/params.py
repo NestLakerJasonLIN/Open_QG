@@ -44,6 +44,10 @@ def params():
     parser.add_argument('--checkpoint_file', type=str, default='checkpoint.pt', help='输出的模型参数位置')
     parser.add_argument('--pred_file', type=str, default='pred.txt', help='输出的预测文件位置')
     parser.add_argument('--gold_file', type=str, default='gold.txt', help='用于比较的真实文件位置')
+    parser.add_argument('--pos_sentence_file', type=str, default='pos_sentence.txt', help='POS tags for sentence')
+    parser.add_argument('--ner_sentence_file', type=str, default='ner_sentence.txt', help='NER tags for sentence')
+    parser.add_argument('--pos_question_file', type=str, default='pos_question.txt', help='POS tags for question')
+    parser.add_argument('--ner_question_file', type=str, default='ner_question.txt', help='NER tags for question')
 
     # 打印相关
     parser.add_argument('--print_params', type=bool, default=False, help='是否打印参数列表')
@@ -99,6 +103,10 @@ def params():
     params.train_question_file = os.path.join(params.train_dir, params.question_file)
     params.train_answer_start_file = os.path.join(params.train_dir, params.answer_start_file)
     params.train_answer_end_file = os.path.join(params.train_dir, params.answer_end_file)
+    params.train_pos_sentence_file = os.path.join(params.train_dir, params.pos_sentence_file)
+    params.train_ner_sentence_file = os.path.join(params.train_dir, params.ner_sentence_file)
+    params.train_pos_question_file = os.path.join(params.train_dir, params.pos_question_file)
+    params.train_ner_question_file = os.path.join(params.train_dir, params.ner_question_file)
 
     params.origin_dev_file = os.path.join(params.origin_dir, params.origin_dev_file)
     params.dev_dir = os.path.join(params.main_data_dir, params.dataset_dir, params.dev_dir)
@@ -106,6 +114,10 @@ def params():
     params.dev_question_file = os.path.join(params.dev_dir, params.question_file)
     params.dev_answer_start_file = os.path.join(params.dev_dir, params.answer_start_file)
     params.dev_answer_end_file = os.path.join(params.dev_dir, params.answer_end_file)
+    params.dev_pos_sentence_file = os.path.join(params.dev_dir, params.pos_sentence_file)
+    params.dev_ner_sentence_file = os.path.join(params.dev_dir, params.ner_sentence_file)
+    params.dev_pos_question_file = os.path.join(params.dev_dir, params.pos_question_file)
+    params.dev_ner_question_file = os.path.join(params.dev_dir, params.ner_question_file)
 
     params.origin_test_file = os.path.join(params.origin_dir, params.origin_test_file)
     params.test_dir = os.path.join(params.main_data_dir, params.dataset_dir, params.test_dir)
@@ -113,6 +125,10 @@ def params():
     params.test_question_file = os.path.join(params.test_dir, params.question_file)
     params.test_answer_start_file = os.path.join(params.test_dir, params.answer_start_file)
     params.test_answer_end_file = os.path.join(params.test_dir, params.answer_end_file)
+    params.test_pos_sentence_file = os.path.join(params.test_dir, params.pos_sentence_file)
+    params.test_ner_sentence_file = os.path.join(params.test_dir, params.ner_sentence_file)
+    params.test_pos_question_file = os.path.join(params.test_dir, params.pos_question_file)
+    params.test_ner_question_file = os.path.join(params.test_dir, params.ner_question_file)
 
     params.embedding_file = os.path.join(params.origin_dir, params.embedding_file)
     params.vocab_file = os.path.join(params.main_data_dir, params.dataset_dir, params.vocab_file)
