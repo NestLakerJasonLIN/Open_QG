@@ -4,3 +4,4 @@ checkpoint
 output
 env
 *.pt
+.idea
