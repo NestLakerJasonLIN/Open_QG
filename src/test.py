@@ -176,6 +176,15 @@ if __name__ == '__main__':
     vocab = data['vocab']
     params = data['params']
 
+    if params.cuda and torch.cuda.is_available():
+        params.cuda = True
+        params.device = torch.device('cuda')
+    else:
+        params.cuda = False
+        params.device = torch.device('cpu')
+
+    logger.info("device: {}".format(params.device))
+
     if params.rnnsearch:
         from rnnsearch import Model
     else:
