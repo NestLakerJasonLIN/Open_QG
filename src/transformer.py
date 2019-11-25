@@ -13,7 +13,7 @@ import torch.nn.functional as F
 
 
 class Model(nn.Module):
-    def __init__(self, params, vocab):
+    def __init__(self, params, vocab, vocab_pos=None, vocab_ner=None):
         '''
         Model类:
         Transformer模型
@@ -27,17 +27,26 @@ class Model(nn.Module):
         self.params = params
         self.vocab = vocab
         self.vocab_size = len(self.vocab)
+        self.vocab_pos = vocab_pos
+        self.vocab_pos_size = len(self.vocab_pos)
+        self.vocab_ner = vocab_ner
+        self.vocab_ner_size = len(self.vocab_ner)
 
-        self.encoder = Encoder(self.params, self.vocab)
-        self.decoder = Decoder(self.params, self.vocab)
+        self.encoder = Encoder(self.params, self.vocab, self.vocab_pos, self.vocab_ner)
+        self.decoder = Decoder(self.params, self.vocab, self.vocab_pos, self.vocab_ner)
 
         # encoder和decoder中部分参数共享
         if self.params.share_embeddings:
             self.decoder.word_embedding_decoder = self.encoder.word_embedding_encoder
             self.decoder.position_embedding_decoder = self.encoder.position_embedding_encoder
             self.decoder.output.weight = self.decoder.word_embedding_decoder.weight
+            self.decoder.pos_embedding_decoder = self.encoder.pos_embedding_encoder
+            self.decoder.ner_embedding_decoder = self.encoder.ner_embedding_encoder
 
-    def forward(self, input_indices, output_indices, answer_indices=None):
+    def forward(self, input_indices, output_indices,
+                pos_input_indices=None, pos_output_indices=None,
+                ner_input_indices=None, ner_output_indices=None,
+                answer_indices=None):
         '''
         输入参数:
         input_indices: [batch_size, input_seq_len]
@@ -48,14 +57,14 @@ class Model(nn.Module):
         output_indices: [batch_size, output_seq_len, vocab_size]
         '''
 
-        encoder_hiddens = self.encoder(input_indices, answer_indices)
-        output_indices = self.decoder(output_indices, input_indices, encoder_hiddens)
+        encoder_hiddens = self.encoder(input_indices, answer_indices, pos_input_indices, ner_input_indices)
+        output_indices = self.decoder(output_indices, input_indices, encoder_hiddens, pos_output_indices, ner_output_indices)
 
         return output_indices
 
 
 class Encoder(nn.Module):
-    def __init__(self, params, vocab):
+    def __init__(self, params, vocab, vocab_pos=None, vocab_ner=None):
         '''
         Encoder类:
         模型的encoder部分
@@ -69,6 +78,10 @@ class Encoder(nn.Module):
         self.params = params
         self.vocab = vocab
         self.vocab_size = len(self.vocab)
+        self.vocab_pos = vocab_pos
+        self.vocab_pos_size = len(self.vocab_pos)
+        self.vocab_ner = vocab_ner
+        self.vocab_ner_size = len(self.vocab_ner)
 
         # 构造掩膜和位置信息
         self.utils = Utils(self.params)
@@ -77,6 +90,8 @@ class Encoder(nn.Module):
         self.word_embedding_encoder = nn.Embedding(self.vocab_size, self.params.d_model)
         self.position_embedding_encoder = nn.Embedding(self.vocab_size, self.params.d_model)
         self.answer_embedding_encoder = nn.Embedding(2, self.params.d_model)
+        self.pos_embedding_encoder = nn.Embedding(self.vocab_pos_size, self.params.d_model)
+        self.ner_embedding_encoder = nn.Embedding(self.vocab_ner_size, self.params.d_model)
 
         # 如果有预训练的词向量,则使用预训练的词向量进行权重初始化
         if self.params.load_embeddings:
@@ -86,7 +101,7 @@ class Encoder(nn.Module):
         # 多个相同子结构组成的encoder子层,层数为num_layers
         self.encoder_layers = nn.ModuleList([Encoder_layer(self.params) for _ in range(self.params.num_layers)])
 
-    def forward(self, input_indices, answer_indices=None):
+    def forward(self, input_indices, answer_indices=None, pos_input_indices=None, ner_input_indices=None):
         '''
         输入参数:
         input_indices: [batch_size, input_seq_len]
@@ -107,6 +122,9 @@ class Encoder(nn.Module):
                         self.position_embedding_encoder(input_indices)
         # input_indices: [batch_size, input_seq_len, d_model]
 
+        # add embedded pos/ner lexical features
+        input_indices += self.pos_embedding_encoder(pos_input_indices) + self.ner_embedding_encoder(ner_input_indices)
+
         # 如果有答案信息,就转换为词向量
         if torch.is_tensor(answer_indices):
             input_indices += self.answer_embedding_encoder(answer_indices)
@@ -121,7 +139,7 @@ class Encoder(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, params, vocab):
+    def __init__(self, params, vocab, vocab_pos=None, vocab_ner=None):
         '''
         Decoder类:
         模型的decoder部分
@@ -135,6 +153,10 @@ class Decoder(nn.Module):
         self.params = params
         self.vocab = vocab
         self.vocab_size = len(self.vocab)
+        self.vocab_pos = vocab_pos
+        self.vocab_pos_size = len(self.vocab_pos)
+        self.vocab_ner = vocab_ner
+        self.vocab_ner_size = len(self.vocab_ner)
 
         # 构造掩膜和位置信息
         self.utils = Utils(self.params)
@@ -142,6 +164,8 @@ class Decoder(nn.Module):
         # embedding层,将索引/位置信息转换为词向量
         self.word_embedding_decoder = nn.Embedding(self.vocab_size, self.params.d_model)
         self.position_embedding_decoder = nn.Embedding(self.vocab_size, self.params.d_model)
+        self.pos_embedding_decoder = nn.Embedding(self.vocab_pos_size, self.params.d_model)
+        self.ner_embedding_decoder = nn.Embedding(self.vocab_ner_size, self.params.d_model)
 
         # 如果有预训练的词向量,则使用预训练的词向量进行权重初始化
         if self.params.load_embeddings:
@@ -157,7 +181,7 @@ class Decoder(nn.Module):
         # copy机制所用的门控
         self.copy_gate = nn.Linear(self.params.d_model * 2, 1)
 
-    def forward(self, output_indices, input_indices, encoder_hiddens):
+    def forward(self, output_indices, input_indices, encoder_hiddens, pos_output_indices=None, ner_output_indices=None):
         '''
         输入参数:
         output_indices: [batch_size, output_seq_len]
@@ -181,6 +205,9 @@ class Decoder(nn.Module):
         output_indices = self.word_embedding_decoder(output_indices) * np.sqrt(self.params.d_model) + \
                          self.position_embedding_decoder(output_indices)
         # output_indices: [batch_size, output_seq_len, d_model]
+
+        # add embedded pos/ner lexical features
+        output_indices += self.pos_embedding_decoder(pos_output_indices) + self.ner_embedding_decoder(ner_output_indices)
 
         # 经过多个相同子结构组成的decoder子层,层数为num_layers
         for decoder_layer in self.decoder_layers:

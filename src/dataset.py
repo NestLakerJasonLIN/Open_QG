@@ -32,12 +32,24 @@ class Dataset(torch.utils.data.Dataset):
         self.train_input_indices = data['train_input_indices']
         self.train_output_indices = data['train_output_indices']
         self.train_answers = data['train_answers']
+        self.train_pos_input_indices = data['train_pos_input_indices']
+        self.train_pos_output_indices = data['train_pos_output_indices']
+        self.train_ner_input_indices = data['train_ner_input_indices']
+        self.train_ner_output_indices = data['train_ner_output_indices']
         self.dev_input_indices = data['dev_input_indices']
         self.dev_output_indices = data['dev_output_indices']
         self.dev_answers = data['dev_answers']
+        self.dev_pos_input_indices = data['dev_pos_input_indices']
+        self.dev_pos_output_indices = data['dev_pos_output_indices']
+        self.dev_ner_input_indices = data['dev_ner_input_indices']
+        self.dev_ner_output_indices = data['dev_ner_output_indices']
         self.test_input_indices = data['test_input_indices']
         self.test_output_indices = data['test_output_indices']
         self.test_answers = data['test_answers']
+        self.test_pos_input_indices = data['test_pos_input_indices']
+        self.test_pos_output_indices = data['test_pos_output_indices']
+        self.test_ner_input_indices = data['test_ner_input_indices']
+        self.test_ner_output_indices = data['test_ner_output_indices']
 
         # 断言: mode值一定在['train', 'dev', 'test']范围内
         assert self.mode in ['train', 'dev', 'test']
@@ -46,6 +58,12 @@ class Dataset(torch.utils.data.Dataset):
         assert len(self.train_input_indices) == len(self.train_output_indices)
         assert len(self.dev_input_indices) == len(self.dev_output_indices)
         assert len(self.test_input_indices) == len(self.test_output_indices)
+        assert len(self.train_pos_input_indices) == len(self.train_pos_output_indices)
+        assert len(self.dev_pos_input_indices) == len(self.dev_pos_output_indices)
+        assert len(self.test_pos_input_indices) == len(self.test_pos_output_indices)
+        assert len(self.train_ner_input_indices) == len(self.train_ner_output_indices)
+        assert len(self.dev_ner_input_indices) == len(self.dev_ner_output_indices)
+        assert len(self.test_ner_input_indices) == len(self.test_ner_output_indices)
         if self.params.answer_embeddings:
             assert len(self.train_input_indices) == len(self.train_answers)
             assert len(self.dev_input_indices) == len(self.dev_answers)
@@ -63,6 +81,10 @@ class Dataset(torch.utils.data.Dataset):
         input_indices: 输入序列
         output_indices: 输出序列
         answers: 答案
+        input_pos: pos feature for input
+        output_pos: pos feature for output
+        input_ner: ner feature for input
+        output_ner: ner feature for output
         vocab: Vocab类
         '''
 
@@ -72,16 +94,28 @@ class Dataset(torch.utils.data.Dataset):
             return self.train_input_indices[index], \
                    self.train_output_indices[index], \
                    self.train_answers[index] if self.train_answers else None, \
+                   self.train_pos_input_indices[index], \
+                   self.train_pos_output_indices[index], \
+                   self.train_ner_input_indices[index], \
+                   self.train_ner_output_indices[index], \
                    self.vocab
         elif self.mode == 'dev':
             return self.dev_input_indices[index], \
                    self.dev_output_indices[index], \
                    self.dev_answers[index] if self.dev_answers else None, \
+                   self.dev_pos_input_indices[index], \
+                   self.dev_pos_output_indices[index], \
+                   self.dev_ner_input_indices[index], \
+                   self.dev_ner_output_indices[index], \
                    self.vocab
         elif self.mode == 'test':
             return self.test_input_indices[index], \
                    self.test_output_indices[index], \
                    self.test_answers[index] if self.test_answers else None, \
+                   self.test_pos_input_indices[index], \
+                   self.test_pos_output_indices[index], \
+                   self.test_ner_input_indices[index], \
+                   self.test_ner_output_indices[index], \
                    self.vocab
 
     def __len__(self):
@@ -120,11 +154,16 @@ def collate_fn(data):
     # 对模型的[输入序列/输出序列/答案]分别构造batch
     batch_input = get_batch(data, mode=0)
     batch_output = get_batch(data, mode=1)
+    batch_pos_input = get_batch(data, mode=3)
+    batch_pos_output = get_batch(data, mode=4)
+    batch_ner_input = get_batch(data, mode=5)
+    batch_ner_output = get_batch(data, mode=6)
 
     # 如果答案部分不存在,则返回的batch_answer为None
     batch_answer = get_batch(data, mode=2, batch_input=batch_input)
 
-    return batch_input, batch_output, batch_answer
+    return batch_input, batch_output, batch_answer, \
+           batch_pos_input, batch_pos_output, batch_ner_input, batch_ner_output
 
 
 def get_batch(data, mode=0, batch_input=None):
@@ -144,11 +183,11 @@ def get_batch(data, mode=0, batch_input=None):
     batch: 构造好的batch
     '''
 
-    # 断言: mode值一定在[0, 1, 2]范围内
-    assert mode in [0, 1, 2]
+    # 断言: mode值一定在[0, 1, 2, 3, 4, 5, 6]范围内
+    assert mode in [0, 1, 2, 3, 4, 5 ,6]
 
     # 输入序列/输出序列的处理方式
-    if mode == 0 or mode == 1:
+    if mode == 0 or mode == 1 or mode >= 3:
         # 获得该batch中的最大句长
         max_len = 0
         # 这里的single_data是上面的__getitem__传下来的,原始的一个batch的内容

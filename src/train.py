@@ -66,7 +66,7 @@ def prepare_dataloaders(params, data):
     return train_loader, dev_loader
 
 
-def train_model(params, vocab, train_loader, dev_loader):
+def train_model(params, vocab, train_loader, dev_loader, vocab_pos=None, vocab_ner=None):
     '''
     作用:
     训练和验证模型
@@ -81,7 +81,7 @@ def train_model(params, vocab, train_loader, dev_loader):
     logger.info('正在加载模型,即将开始训练')
 
     # 定义模型
-    model = Model(params, vocab).to(params.device)
+    model = Model(params, vocab, vocab_pos, vocab_ner).to(params.device)
 
     # 如果参数中设置了打印模型结构,则打印模型结构
     if params.print_model:
@@ -167,6 +167,10 @@ def one_epoch(params, vocab, loader, model, optimizer, epoch, mode='train'):
             answer_indices = batch[2].to(params.device)
         else:
             answer_indices = None
+        pos_input_indices = batch[3].to(params.device)
+        pos_output_indices = batch[4].to(params.device)
+        ner_input_indices = batch[5].to(params.device)
+        ner_output_indices = batch[6].to(params.device)
         # input_indices: [batch_size, input_seq_len]
         # output_indices: [batch_size, output_seq_len]
         # answer_indices: [batch_size, output_seq_len]
@@ -183,9 +187,14 @@ def one_epoch(params, vocab, loader, model, optimizer, epoch, mode='train'):
         # 原始数据: <s> 1 2 3 </s>
         # 真实输出: <s> 1 2 3
         output_indices = output_indices[:, :-1]
+        pos_output_indices = pos_output_indices[:, :-1]
+        ner_output_indices = ner_output_indices[:, :-1]
 
         # 将输入数据导入模型,得到预测的输出数据
-        output_indices_pred = model(input_indices, output_indices, answer_indices=answer_indices)
+        output_indices_pred = model(input_indices, output_indices,
+                                    pos_input_indices=pos_input_indices, pos_output_indices=pos_output_indices,
+                                    ner_input_indices=ner_input_indices, ner_output_indices=ner_output_indices,
+                                    answer_indices=answer_indices)
         # output_indices_pred: [batch_size, output_seq_len, vocab_size]
 
         # 将基于vocab的概率分布,通过取最大值的方式得到预测的输出序列
@@ -290,6 +299,8 @@ if __name__ == '__main__':
     # 包括:vocab,训练集/验证集各自的输入/输出索引序列
     data = torch.load(params.temp_pt_file)
     vocab = data['vocab']
+    vocab_pos = data['vocab_pos']
+    vocab_ner = data['vocab_ner']
     params = data['params']
 
     if params.cuda and torch.cuda.is_available():
@@ -319,4 +330,4 @@ if __name__ == '__main__':
     train_loader, dev_loader = prepare_dataloaders(params, data)
 
     # 训练模型
-    train_model(params, vocab, train_loader, dev_loader)
+    train_model(params, vocab, train_loader, dev_loader, vocab_ner=vocab_ner, vocab_pos=vocab_pos)
