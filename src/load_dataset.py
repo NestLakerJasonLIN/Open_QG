@@ -14,7 +14,7 @@ from logger import logger
 from params import params
 
 
-def load_dataset(params, origin_file, sentence_file, question_file, answer_start_file, answer_end_file):
+def load_dataset(params, origin_file, sentence_file, question_file, answer_start_file, answer_end_file, answer_ner_file):
     '''
     作用:
     将json形式的原始文件中的[句子/问题/答案]三元组转换为txt形式
@@ -40,6 +40,7 @@ def load_dataset(params, origin_file, sentence_file, question_file, answer_start
     f_question = open(question_file, 'w')
     f_answer_start = open(answer_start_file, 'w')
     f_answer_end = open(answer_end_file, 'w')
+    f_answer_ner = open(answer_ner_file, 'w')
 
     # 依次处理所有数据
     for instance in instances:
@@ -47,11 +48,13 @@ def load_dataset(params, origin_file, sentence_file, question_file, answer_start
         sentence = instance['annotation1']['toks'].strip().lower()
         question = instance['annotation2']['toks'].strip().lower()
         answer = instance['annotation3']['toks'].strip().lower()
+        answer_ner = instance['annotation3']['NERs'].strip().lower()
 
         # 将str切分为list
         sentence = sentence.split()
         question = question.split()
         answer = answer.split()
+        answer_ner = answer_ner.split()
 
         # 找到答案起止位置
         answer_start = 0
@@ -77,6 +80,7 @@ def load_dataset(params, origin_file, sentence_file, question_file, answer_start
             f_question.write(' '.join(question) + '\n')
             f_answer_start.write(str(answer_start) + '\n')
             f_answer_end.write(str(answer_end) + '\n')
+            f_answer_ner.write(' '.join(answer_ner) + '\n')
             num += 1
 
     # 关闭所有文件
@@ -84,6 +88,7 @@ def load_dataset(params, origin_file, sentence_file, question_file, answer_start
     f_question.close()
     f_answer_start.close()
     f_answer_end.close()
+    f_answer_ner.close()
 
     logger.info('从{}中加载原始数据{}, 其中成功加载数据{}'.format(origin_file, total, num))
 
@@ -193,16 +198,19 @@ if __name__ == '__main__':
                     params.train_sentence_file,
                     params.train_question_file,
                     params.train_answer_start_file,
-                    params.train_answer_end_file),
+                    params.train_answer_end_file,
+                    params.train_answer_ner_file)
         load_dataset(params,
                     params.origin_dev_file,
                     params.dev_sentence_file,
                     params.dev_question_file,
                     params.dev_answer_start_file,
-                    params.dev_answer_end_file)
+                    params.dev_answer_end_file,
+                    params.dev_answer_ner_file)
         load_dataset(params,
                     params.origin_test_file,
                     params.test_sentence_file,
                     params.test_question_file,
                     params.test_answer_start_file,
-                    params.test_answer_end_file)
+                    params.test_answer_end_file,
+                    params.test_answer_ner_file)
