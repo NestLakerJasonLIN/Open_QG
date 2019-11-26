@@ -132,8 +132,19 @@ class Encoder(nn.Module):
 
         # add embedded pos/ner lexical features
         if (self.params.lexical_feature):
-            input_indices += self.pos_embedding_encoder(pos_input_indices) + \
-                             self.ner_embedding_encoder(ner_input_indices)
+            try:
+                input_indices += self.pos_embedding_encoder(pos_input_indices) + \
+                                    self.ner_embedding_encoder(ner_input_indices)
+            except Exception as e:
+                # TODO: fix this
+                print("pos shape: " + pos_input_indices.shape)
+                print("ner shape: " + ner_input_indices.shape)
+                print("input shape: " + input_indices.shape)
+                print('Error: ' + str(e))
+                ner_input_indices = ner_input_indices[:, :input_indices.size(1), :]
+                pos_input_indices = pos_input_indices[:, :input_indices.size(1), :]
+                input_indices += self.pos_embedding_encoder(pos_input_indices) + \
+                                 self.ner_embedding_encoder(ner_input_indices)
 
         # 如果有答案信息,就转换为词向量
         if torch.is_tensor(answer_indices):
