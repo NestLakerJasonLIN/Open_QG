@@ -176,9 +176,6 @@ class Decoder(nn.Module):
         # embedding层,将索引/位置信息转换为词向量
         self.word_embedding_decoder = nn.Embedding(self.vocab_size, self.params.d_model)
         self.position_embedding_decoder = nn.Embedding(self.vocab_size, self.params.d_model)
-        if (self.params.lexical_feature):
-            self.pos_embedding_decoder = nn.Embedding(self.vocab_pos_size, self.params.d_model)
-            self.ner_embedding_decoder = nn.Embedding(self.vocab_ner_size, self.params.d_model)
 
         # 如果有预训练的词向量,则使用预训练的词向量进行权重初始化
         if self.params.load_embeddings:
@@ -218,11 +215,6 @@ class Decoder(nn.Module):
         output_indices = self.word_embedding_decoder(output_indices) * np.sqrt(self.params.d_model) + \
                          self.position_embedding_decoder(output_indices)
         # output_indices: [batch_size, output_seq_len, d_model]
-
-        # add embedded pos/ner lexical features
-        if (self.params.lexical_feature):
-            output_indices += self.pos_embedding_decoder(pos_output_indices) + \
-                              self.ner_embedding_decoder(ner_output_indices)
 
         # 经过多个相同子结构组成的decoder子层,层数为num_layers
         for decoder_layer in self.decoder_layers:
