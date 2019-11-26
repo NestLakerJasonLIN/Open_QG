@@ -52,7 +52,7 @@ def prepare_dataloaders(params, data):
     return test_loader
 
 
-def test_model(params, vocab, test_loader):
+def test_model(params, vocab, test_loader, vocab_pos=None, vocab_ner=None):
     '''
     作用:
     测试模型
@@ -66,7 +66,7 @@ def test_model(params, vocab, test_loader):
     logger.info('正在加载模型,即将开始测试')
 
     # 定义模型
-    model = Model(params, vocab).to(params.device)
+    model = Model(params, vocab, vocab_pos, vocab_ner).to(params.device)
 
     # 如果参数中设置了打印模型结构,则打印模型结构
     if params.print_model:
@@ -130,13 +130,19 @@ def one_epoch(params, vocab, loader, model):
             answer_indices = batch[2].to(params.device)
         else:
             answer_indices = None
+        pos_input_indices = batch[3].to(params.device)
+        pos_output_indices = batch[4].to(params.device)
+        ner_input_indices = batch[5].to(params.device)
+        ner_output_indices = batch[6].to(params.device)
         # input_indices: [batch_size, input_seq_len]
         # output_indices: [batch_size, output_seq_len]
         # answer_indices: [batch_size, output_seq_len]
 
         # 使用beam_search算法,以<s>作为开始符得到完整的预测序列
         generator = Generator(params, model)
-        indices_pred, scores_pred = generator.generate_batch(input_indices, src_ans=answer_indices)
+        indices_pred, scores_pred = generator.generate_batch(input_indices, src_ans=answer_indices,
+                                                             pos_input_indices=pos_input_indices,
+                                                             ner_input_indices=ner_input_indices)
         # indices_pred: [batch_size, beam_size, output_seq_len]
 
         # 输出预测序列
@@ -189,8 +195,12 @@ if __name__ == '__main__':
 
     if (params.lexical_feature):
         logger.info("Use lexical features")
+        vocab_pos = data['vocab_pos']
+        vocab_ner = data['vocab_ner']
     else:
         logger.info("Not use lexical features")
+        vocab_pos = None
+        vocab_ner = None
 
     if params.rnnsearch:
         from rnnsearch import Model
@@ -205,4 +215,4 @@ if __name__ == '__main__':
     test_loader = prepare_dataloaders(params, data)
 
     # 测试模型
-    test_model(params, vocab, test_loader)
+    test_model(params, vocab, test_loader, vocab_pos=vocab_pos, vocab_ner=vocab_ner)
