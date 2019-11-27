@@ -18,7 +18,7 @@ from params import params
 from vocab import Vocab
 
 
-def load_dataset(params, origin_file):
+def load_dataset(params, origin_file, is_answer = False):
     '''
     作用:
     从txt形式的文件中读取模型需要使用的文本数据,转换为list形式
@@ -42,7 +42,10 @@ def load_dataset(params, origin_file):
         words = words[:params.max_seq_len]
 
         # 每个输入句子需要加入起止标志符<s>和</s>
-        sentence = ['<s>'] + words + ['</s>']
+        if (not is_answer):
+            sentence = ['<s>'] + words + ['</s>']
+        else:
+            sentence = words
         sentences.append(sentence)
     
     logger.info('从{}中成功加载数据{}'.format(origin_file, len(sentences)))
@@ -230,10 +233,14 @@ if __name__ == '__main__':
     test_input_sentences = load_dataset(params, params.test_sentence_file)
     test_output_sentences = load_dataset(params, params.test_question_file)
     train_answers = dev_answers = test_answers = None
+    train_answer_ner = dev_answer_ner = test_answer_ner = None
     if params.answer_embeddings:
         train_answers = load_answer(params.train_answer_start_file, params.train_answer_end_file)
         dev_answers = load_answer(params.dev_answer_start_file, params.dev_answer_end_file)
         test_answers = load_answer(params.test_answer_start_file, params.test_answer_end_file)
+        train_answer_ner = load_dataset(params, params.train_answer_ner_file, is_answer=True)
+        dev_answer_ner = load_dataset(params, params.dev_answer_ner_file, is_answer=True)
+        test_answer_ner = load_dataset(params, params.test_answer_ner_file, is_answer=True)
 
     # 断言:[句子/问题/答案]数量一致
     assert len(train_input_sentences) == len(train_output_sentences) 
@@ -247,20 +254,26 @@ if __name__ == '__main__':
     # 加载/构造vocab
     if params.load_vocab and os.path.exists(params.vocab_file):
         vocab = load_vocab(params, params.vocab_file)
+        vocab_answer_ner = load_vocab(params, params.vocab_answer_ner_file)
     else:
         vocab = build_vocab(params, params.vocab_file,
                             train_input_sentences + \
                             train_output_sentences + \
                             dev_input_sentences + \
                             dev_output_sentences)
+        vocab_answer_ner = build_vocab(params, params.vocab_answer_ner_file,
+                                    train_answer_ner + dev_answer_ner)
 
     # 将单词转化为index
     train_input_indices = convert_sentence2index(train_input_sentences, vocab)
     train_output_indices = convert_sentence2index(train_output_sentences, vocab)
+    train_answer_ner_indices = convert_sentence2index(train_answer_ner, vocab_answer_ner)
     dev_input_indices = convert_sentence2index(dev_input_sentences, vocab)
     dev_output_indices = convert_sentence2index(dev_output_sentences, vocab)
+    dev_answer_ner_indices = convert_sentence2index(dev_answer_ner, vocab_answer_ner)
     test_input_indices = convert_sentence2index(test_input_sentences, vocab)
     test_output_indices = convert_sentence2index(test_output_sentences, vocab)
+    test_answer_ner_indices = convert_sentence2index(test_answer_ner, vocab_answer_ner)
 
     logger.info('正在将数据中的单词转换为索引')
 
@@ -268,15 +281,19 @@ if __name__ == '__main__':
     data = {
         'params' : params,
         'vocab' : vocab,
+        'vocab_answer_ner' : vocab_answer_ner,
         'train_input_indices' : train_input_indices,
         'train_output_indices' : train_output_indices,
         'train_answers' : train_answers,
+        'train_answer_ner_indices' : train_answer_ner_indices,
         'dev_input_indices' : dev_input_indices,
         'dev_output_indices' : dev_output_indices,
         'dev_answers' : dev_answers,
+        'dev_answer_ner_indices': dev_answer_ner_indices,
         'test_input_indices' : test_input_indices,
         'test_output_indices' : test_output_indices,
         'test_answers' : test_answers,
+        'test_answer_ner_indices': test_answer_ner_indices
     }
     torch.save(data, params.temp_pt_file)
 

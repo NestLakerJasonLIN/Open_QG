@@ -29,15 +29,19 @@ class Dataset(torch.utils.data.Dataset):
         self.mode = mode
         
         self.vocab = data['vocab']
+        self.vocab_answer_ner = data['vocab_answer_ner']
         self.train_input_indices = data['train_input_indices']
         self.train_output_indices = data['train_output_indices']
         self.train_answers = data['train_answers']
+        self.train_answer_ner_indices = data['train_answer_ner_indices']
         self.dev_input_indices = data['dev_input_indices']
         self.dev_output_indices = data['dev_output_indices']
         self.dev_answers = data['dev_answers']
+        self.dev_answer_ner_indices = data['dev_answer_ner_indices']
         self.test_input_indices = data['test_input_indices']
         self.test_output_indices = data['test_output_indices']
         self.test_answers = data['test_answers']
+        self.test_answer_ner_indices = data['test_answer_ner_indices']
 
         # 断言: mode值一定在['train', 'dev', 'test']范围内
         assert self.mode in ['train', 'dev', 'test']
@@ -50,6 +54,9 @@ class Dataset(torch.utils.data.Dataset):
             assert len(self.train_input_indices) == len(self.train_answers)
             assert len(self.dev_input_indices) == len(self.dev_answers)
             assert len(self.test_input_indices) == len(self.test_answers)
+            assert len(self.train_answer_ner_indices) == len(self.train_answers)
+            assert len(self.dev_answer_ner_indices) == len(self.dev_answers)
+            assert len(self.test_answer_ner_indices) == len(self.test_answers)
 
     def __getitem__(self, index):
         '''
@@ -72,16 +79,19 @@ class Dataset(torch.utils.data.Dataset):
             return self.train_input_indices[index], \
                    self.train_output_indices[index], \
                    self.train_answers[index] if self.train_answers else None, \
+                   self.train_answer_ner_indices[index], \
                    self.vocab
         elif self.mode == 'dev':
             return self.dev_input_indices[index], \
                    self.dev_output_indices[index], \
                    self.dev_answers[index] if self.dev_answers else None, \
+                   self.dev_answer_ner_indices[index], \
                    self.vocab
         elif self.mode == 'test':
             return self.test_input_indices[index], \
                    self.test_output_indices[index], \
                    self.test_answers[index] if self.test_answers else None, \
+                   self.test_answer_ner_indices[index], \
                    self.vocab
 
     def __len__(self):
@@ -171,8 +181,12 @@ def get_batch(data, mode=0, batch_input=None):
         batch = torch.tensor(batch)
 
     elif mode == 2:
+        answer_ner_mode = mode + 1
         # 如果答案部分不为空,对答案部分构造batch,否则返回None
         if data[0][mode] != None:
+            # answer_ner should also not be None
+            assert data[0][answer_ner_mode] != None
+
             # 在构造答案时需要构造一个大小和输入序列完全一样的tensor
             batch = torch.zeros_like(batch_input)
 
@@ -182,7 +196,12 @@ def get_batch(data, mode=0, batch_input=None):
                 # 因为输入序列有<s>作为起始符,因此真实答案位置需要后移一位
                 answer_start = answer[0] + 1
                 answer_end = answer[1] + 1
-                batch[index][answer_start : answer_end] = 1
+                # avoid answer indices out of boundary after sentence cutoff
+                if (answer_end <= len(batch[index])):
+                    # note: answer_end-answer_start may not equal to len(answer_ner)
+                    # this is due to the wrong input of raw json file. Here we stick to the length given by answer_ner tag
+                    for i in range(0, len(single_data[answer_ner_mode])):
+                        batch[index][answer_start + i] = single_data[answer_ner_mode][i]
         else:
             return None
 

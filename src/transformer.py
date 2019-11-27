@@ -13,7 +13,7 @@ import torch.nn.functional as F
 
 
 class Model(nn.Module):
-    def __init__(self, params, vocab):
+    def __init__(self, params, vocab, vocab_answer_ner=None):
         '''
         Model类:
         Transformer模型
@@ -27,8 +27,14 @@ class Model(nn.Module):
         self.params = params
         self.vocab = vocab
         self.vocab_size = len(self.vocab)
+        if (vocab_answer_ner!=None):
+            self.vocab_answer_ner = vocab_answer_ner
+            self.vocab_answer_ner_size = len(vocab_answer_ner)
+        else:
+            self.vocab_answer_ner = None
+            self.vocab_answer_ner_size = 0
 
-        self.encoder = Encoder(self.params, self.vocab)
+        self.encoder = Encoder(self.params, self.vocab, self.vocab_answer_ner)
         self.decoder = Decoder(self.params, self.vocab)
 
         # encoder和decoder中部分参数共享
@@ -55,7 +61,7 @@ class Model(nn.Module):
 
 
 class Encoder(nn.Module):
-    def __init__(self, params, vocab):
+    def __init__(self, params, vocab, vocab_answer_ner=None):
         '''
         Encoder类:
         模型的encoder部分
@@ -69,6 +75,12 @@ class Encoder(nn.Module):
         self.params = params
         self.vocab = vocab
         self.vocab_size = len(self.vocab)
+        if (vocab_answer_ner!=None):
+            self.vocab_answer_ner = vocab_answer_ner
+            self.vocab_answer_ner_size = len(vocab_answer_ner)
+        else:
+            self.vocab_answer_ner = None
+            self.vocab_answer_ner_size = 0
 
         # 构造掩膜和位置信息
         self.utils = Utils(self.params)
@@ -76,7 +88,7 @@ class Encoder(nn.Module):
         # embedding层,将索引/位置信息转换为词向量
         self.word_embedding_encoder = nn.Embedding(self.vocab_size, self.params.d_model)
         self.position_embedding_encoder = nn.Embedding(self.vocab_size, self.params.d_model)
-        self.answer_embedding_encoder = nn.Embedding(2, self.params.d_model)
+        self.answer_embedding_encoder = nn.Embedding(self.vocab_answer_ner_size, self.params.d_model)
 
         # 如果有预训练的词向量,则使用预训练的词向量进行权重初始化
         if self.params.load_embeddings:
