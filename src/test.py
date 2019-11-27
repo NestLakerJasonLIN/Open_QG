@@ -66,7 +66,7 @@ def test_model(params, vocab, test_loader):
     logger.info('正在加载模型,即将开始测试')
 
     # 定义模型
-    model = Model(params, vocab).to(params.device)
+    model = Model(params, vocab, vocab_answer_ner).to(params.device)
 
     # 如果参数中设置了打印模型结构,则打印模型结构
     if params.print_model:
@@ -174,6 +174,7 @@ if __name__ == '__main__':
     # 包括:vocab,训练集/验证集各自的输入/输出索引序列
     data = torch.load(params.temp_pt_file)
     vocab = data['vocab']
+    vocab_answer_ner = data['vocab_answer_ner']
     params = data['params']
 
     if params.cuda and torch.cuda.is_available():
