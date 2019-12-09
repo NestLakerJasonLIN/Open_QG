@@ -37,6 +37,7 @@ def init():
     # 包括:vocab,训练集/验证集各自的输入/输出索引序列
     data = torch.load(params.temp_pt_file)
     vocab = data['vocab']
+    vocab_answer_ner = data['vocab_answer_ner']
     params = data['params']
 
     if params.rnnsearch:
@@ -49,7 +50,7 @@ def init():
         logger.info('参数列表:{}'.format(params))
 
     # 定义模型
-    model = Model(params, vocab).to(params.device)
+    model = Model(params, vocab, vocab_answer_ner=vocab_answer_ner).to(params.device)
 
     # 如果参数中设置了打印模型结构,则打印模型结构
     if params.print_model:
@@ -68,10 +69,10 @@ def init():
     # 定义生成器
     generator = Generator(params, model)
 
-    return logger, params, vocab, model, generator
+    return logger, params, vocab, vocab_answer_ner, model, generator
 
 
-def demo(input_sentence, input_answer, logger, params, vocab, model, generator):
+def demo(input_sentence, input_answer, logger, params, vocab, vocab_answer_ner, model, generator):
     '''
     作用:
     模型和参数初始化
@@ -90,16 +91,19 @@ def demo(input_sentence, input_answer, logger, params, vocab, model, generator):
     output_question: 输出问题
     '''
 
-    # 将输入句子和答案构造成统一文本
-    input_sentence = '<cls> ' + input_sentence + ' <sep> ' + input_answer + ' <sep>'
-    logger.info('输入句子的文本形式为 : {}'.format(input_sentence))
+    input_sentence = '<cls> ' + input_sentence
+    logger.info('输入句子的文本形式为 : {}{}'.format(input_sentence, ' <sep> ' + input_answer + ' <sep>'))
+
+    input_answer = ' <sep> ' + input_answer + ' <sep>'
+    input_answer = input_answer.split()
+    input_answer_indices = vocab_answer_ner.convert_sentence2index(input_answer)
 
     # 将文本转化为list,并添加起止符<s>和</s>
     input_sentence = input_sentence.split()
-    input_sentence = ['<s>'] + input_sentence + ['</s>']
-
-    # 将输入句子转化为索引形式
     input_indices = vocab.convert_sentence2index(input_sentence)
+
+    input_indices = [vocab.convert_word2index('<s>')] + input_indices + input_answer_indices + [vocab.convert_word2index('</s>')]
+
     logger.info('输入句子的索引形式为 : {}'.format(input_indices))
 
     # 输入模型
@@ -126,7 +130,7 @@ def demo(input_sentence, input_answer, logger, params, vocab, model, generator):
 if __name__ == '__main__':
 
     # 模型和参数初始化
-    logger, params, vocab, model, generator = init()
+    logger, params, vocab, vocab_answer_ner, model, generator = init()
 
     # 测试demo: 输入句子和答案,输出问题
     output_question = demo(input_sentence = 'There are 5000000 people in the united states .',
@@ -134,5 +138,6 @@ if __name__ == '__main__':
                     logger = logger,
                     params = params,
                     vocab = vocab,
+                    vocab_answer_ner = vocab_answer_ner,
                     model = model,
                     generator = generator)
