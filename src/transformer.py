@@ -115,7 +115,7 @@ class Encoder(nn.Module):
             input_indices = torch.cat([input_indices.to(self.params.device), answer_indices.unsqueeze(-1).type(torch.FloatTensor).to(self.params.device)], dim=-1).to(self.params.device)
             #input_indices += self.answer_embedding_encoder(answer_indices)
 
-        input_indices = self.merge_ans_layer(input_indices)
+            input_indices = self.merge_ans_layer(input_indices)
 
         # 经过多个相同子结构组成的decoder子层,层数为num_layers
         for encoder_layer in self.encoder_layers:
