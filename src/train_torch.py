@@ -274,8 +274,6 @@ def one_epoch(params, vocab, loader, model, optimizer, epoch, mode='train'):
             output_pred = sentences_pred[-1]
             logger.info('预测输出序列 : {}'.format(output_pred))
 
-        break
-
     # 计算总损失
     total_loss = total_loss / total_examples
 

@@ -160,7 +160,6 @@ def one_epoch(params, vocab, loader, model):
 
             output_pred = sentences_pred[-1]
             logger.info('预测输出序列 : {}'.format(output_pred))
-        break
     return sentences_pred
 
 
