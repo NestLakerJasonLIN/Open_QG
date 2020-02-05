@@ -276,8 +276,23 @@ if __name__ == '__main__':
         'dev_answers' : dev_answers,
         'test_input_indices' : test_input_indices,
         'test_output_indices' : test_output_indices,
-        'test_answers' : test_answers,
+        'test_answers' : test_answers
     }
+
+    model_statistics = {
+        "training_losses": [],
+        "best_training_loss": float("inf"),
+        "dev_losses": [],
+        "best_dev_loss": float("inf"),
+        "epochs": 0,
+        "best_epoch": -1,
+        "sampling_frequency" : 5,
+        "sampling_training" : [],
+        "sampling_dev": []
+    }
+
     torch.save(data, params.temp_pt_file)
+    torch.save(model_statistics, params.model_statistics_file)
 
     logger.info('构造数据输出已经保存至{}'.format(params.temp_pt_file))
+    logger.info('model statistics is saved to {}'.format(params.model_statistics_file))

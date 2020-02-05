@@ -41,6 +41,7 @@ def params():
     parser.add_argument('--embedding_file', type=str, default='embedding.txt', help='词向量的文件位置')
     parser.add_argument('--vocab_file', type=str, default='vocab.txt', help='vocab位置')
     parser.add_argument('--temp_pt_file', type=str, default='data.pt', help='暂存的pt文件位置')
+    parser.add_argument('--model_statistics_file', type=str, default='model_statistics.pt', help='暂存的pt文件位置')
     parser.add_argument('--checkpoint_file', type=str, default='checkpoint.pt', help='输出的模型参数位置')
     parser.add_argument('--pred_file', type=str, default='pred.txt', help='输出的预测文件位置')
     parser.add_argument('--gold_file', type=str, default='gold.txt', help='用于比较的真实文件位置')
@@ -117,6 +118,7 @@ def params():
     params.embedding_file = os.path.join(params.origin_dir, params.embedding_file)
     params.vocab_file = os.path.join(params.main_data_dir, params.dataset_dir, params.vocab_file)
     params.temp_pt_file = os.path.join(params.main_data_dir, params.dataset_dir, params.temp_pt_file)
+    params.model_statistics_file = os.path.join(params.main_data_dir, params.dataset_dir, params.model_statistics_file)
 
     params.checkpoint_dir = os.path.join(params.main_checkpoint_dir, params.dataset_dir)
     params.checkpoint_file = os.path.join(params.checkpoint_dir, params.checkpoint_file)
