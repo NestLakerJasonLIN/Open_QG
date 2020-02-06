@@ -170,11 +170,32 @@ if __name__ == '__main__':
     logger = logger()
     params = params()
 
+    params.temp_pt_file = "data/squad/data_1.pt"
+
     # 从已保存的pt文件中读取数据
     # 包括:vocab,训练集/验证集各自的输入/输出索引序列
     data = torch.load(params.temp_pt_file)
     vocab = data['vocab']
     params = data['params']
+    params.num_epochs = 15
+    params.print_results = False
+    params.print_loss = False
+    params.label_smoothing = True
+    params.learning_rate = 0.001
+    params.beam_size = 5
+    params.d_model = 128
+    params.rnnsearch = False
+    params.num_heads = 1
+    params.d_k = 64
+    params.dropout = 0.5
+    params.num_layers = 2
+    params.batch_size = 128
+    
+    # params.checkpoint_file = "checkpoint/squad/checkpoint_original.pt"
+    # params.model_statistics_file = "data/squad/model_statistics_original.pt"
+
+    # params.pred_file = "output/squad/pred_train.txt"
+    # params.gold_file = "output/squad/gold_train.txt"
 
     if params.rnnsearch:
         from rnnsearch import Model

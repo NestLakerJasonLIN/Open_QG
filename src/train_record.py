@@ -21,7 +21,7 @@ from tqdm import tqdm
 from logger import logger
 from params import params
 from vocab import Vocab
-from dataset_actual import Dataset, collate_fn
+from dataset import Dataset, collate_fn
 from optimizer import Optimizer
 
 
@@ -121,7 +121,7 @@ def train_model(params, vocab, train_loader, dev_loader, model_statistics):
             model_statistics["best_dev_loss"] = dev_total_loss
             model_statistics["best_epoch"] = epoch
 
-        logger.info("{}th epoch, training loss: {} dev loss: {}"
+        logger.info("{}th epoch, training loss: {} dev loss: {} "
                     "best epoch: {} best training loss: {} best dev loss: {}".format(
             model_statistics["epochs"], training_total_loss, dev_total_loss,
             model_statistics["best_epoch"], model_statistics["best_training_loss"], model_statistics["best_dev_loss"]))
@@ -316,35 +316,48 @@ def one_epoch(params, vocab, loader, model, optimizer, epoch, model_statistics, 
 
 if __name__ == '__main__':
 
+    torch.manual_seed(0)
+
     # 加载日志输出器和参数集合
     logger = logger()
     params = params()
 
+    params.temp_pt_file = "data/squad/data_1.pt"    
+
     # 从已保存的pt文件中读取数据
     # 包括:vocab,训练集/验证集各自的输入/输出索引序列
     data = torch.load(params.temp_pt_file)
+
+    vocab = data['vocab']
+    params = data['params']
+    params.print_results = False
+    params.num_epochs = 50
+    params.print_loss = False
+    params.label_smoothing = True
+    params.learning_rate = 0.001
+    params.beam_size = 5
+    params.d_model = 128
+    params.rnnsearch = False
+    params.num_heads = 1
+    params.d_k = 64
+    params.dropout = 0.5
+    params.num_layers = 2
+    params.batch_size = 128
+
+    # params.checkpoint_file = "checkpoint/squad/checkpoint_original.pt"
+    # params.model_statistics_file = "data/squad/model_statistics_original.pt"
+    params.num_epochs = 5
+    # params.with_copy = True
+    # params.share_embeddings = True
+
     model_statistics = torch.load(params.model_statistics_file)
 
     print("model statistics: \n{}\n".format(model_statistics))
 
-    vocab = data['vocab']
-    params = data['params']
-    params.device = "cuda:0"
-    params.print_results = False
-    params.num_epochs = 20
-    params.print_loss = False
-    params.label_smoothing = False
-    # params.learning_rate = 0.01
-    # params.beam_size = 10
-    # params.d_model = 512
-    params.rnnsearch = True
-    # params.with_copy = True
-    # params.share_embeddings = True
-
     if params.rnnsearch:
         from rnnsearch import Model
     else:
-        from torchmodel import Model
+        from transformer import Model
 
     # 打印参数列表
     if params.print_params:

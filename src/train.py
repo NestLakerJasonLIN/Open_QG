@@ -292,7 +292,7 @@ if __name__ == '__main__':
     vocab = data['vocab']
     params = data['params']
 
-    # params.num_epochs = 5
+    params.num_epochs = 5
     # params.print_loss = True
     # params.with_copy = True
     # params.share_embeddings = True
