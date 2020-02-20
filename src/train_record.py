@@ -298,7 +298,7 @@ def one_epoch(params, vocab, loader, model, optimizer, epoch, model_statistics, 
             logger.info('真实输出序列 : {}'.format(output_gold))
             logger.info('预测输出序列 : {}'.format(output_pred))
 
-        if (epoch==1 or epoch % model_statistics["sampling_frequency"] == 0) and batch_index == 0:
+        if batch_index % model_statistics["sampling_frequency"] == 0:
             sample = {
                 "epoch" : epoch,
                 "input_gold" : input_gold,
