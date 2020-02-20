@@ -179,6 +179,9 @@ def one_epoch(params, vocab, loader, model, optimizer, epoch, model_statistics, 
     # 记录训练/验证的总损失
     total_loss = 0
 
+    model_statistics["sampling_training"][epoch] = []
+    model_statistics["sampling_dev"][epoch] = []
+
     # 每一个batch的训练/验证
     for batch_index, batch in enumerate(tqdm(loader)):
         # 从数据中读取模型的输入和输出
@@ -304,9 +307,9 @@ def one_epoch(params, vocab, loader, model, optimizer, epoch, model_statistics, 
                 "output_pred" : output_pred
             }
             if mode == "train":
-                model_statistics["sampling_training"].append(sample)
+                model_statistics["sampling_training"][epoch].append(sample)
             if mode == "dev":
-                model_statistics["sampling_dev"].append(sample)
+                model_statistics["sampling_dev"][epoch].append(sample)
 
     # 计算总损失
     total_loss = total_loss / total_examples
@@ -322,33 +325,19 @@ if __name__ == '__main__':
     logger = logger()
     params = params()
 
-    params.temp_pt_file = "data/squad/data_1.pt"    
-
     # 从已保存的pt文件中读取数据
     # 包括:vocab,训练集/验证集各自的输入/输出索引序列
     data = torch.load(params.temp_pt_file)
 
     vocab = data['vocab']
     params = data['params']
-    params.print_results = False
-    params.num_epochs = 50
-    params.print_loss = False
-    params.label_smoothing = True
-    params.learning_rate = 0.001
-    params.beam_size = 5
-    params.d_model = 128
-    params.rnnsearch = False
-    params.num_heads = 1
-    params.d_k = 64
-    params.dropout = 0.5
-    params.num_layers = 2
-    params.batch_size = 128
 
-    # params.checkpoint_file = "checkpoint/squad/checkpoint_original.pt"
-    # params.model_statistics_file = "data/squad/model_statistics_original.pt"
-    params.num_epochs = 5
-    # params.with_copy = True
-    # params.share_embeddings = True
+    # params.d_model = 128
+    # params.num_heads = 1
+    # params.d_k = 64
+    # params.dropout = 0.5
+    # params.num_layers = 2
+    # params.num_epochs = 5
 
     model_statistics = torch.load(params.model_statistics_file)
 

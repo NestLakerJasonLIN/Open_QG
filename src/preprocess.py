@@ -287,8 +287,8 @@ if __name__ == '__main__':
         "epochs": 0,
         "best_epoch": -1,
         "sampling_frequency" : 5,
-        "sampling_training" : [],
-        "sampling_dev": []
+        "sampling_training" : {},
+        "sampling_dev": {}
     }
 
     torch.save(data, params.temp_pt_file)

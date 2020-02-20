@@ -39,7 +39,10 @@ def prepare_dataloaders(params, data):
     logger.info('正在从{}中读取数据'.format(params.dataset_dir))
 
     # 构造test_loader
-    test_dataset = Dataset(params, data, mode='test')
+    if params.test_on_train:
+        test_dataset = Dataset(params, data, mode='train')
+    else:
+        test_dataset = Dataset(params, data, mode='test')
     test_loader = torch.utils.data.DataLoader(
         dataset = test_dataset,
         num_workers = params.num_workers,
@@ -93,8 +96,11 @@ def test_model(params, vocab, test_loader):
     f_pred.close()
     logger.info('测试阶段的预测结果已经保存至{}'.format(params.pred_file))
 
-    # 原始的真实输出文件,需要从数据目录移动到输出目录下,用于和预测结果进行比较
-    shutil.copyfile(params.test_question_file, params.gold_file)
+    # 原始的真实输出文件,需要从数据目录移动
+    if params.test_on_train:
+        shutil.copyfile(params.train_question_file, params.gold_file)
+    else:
+        shutil.copyfile(params.test_question_file, params.gold_file)
 
     # 使用multi-bleu.perl的脚本对结果进行评估
     os.system('evaluate/multi-bleu.perl %s < %s' %(params.gold_file, params.pred_file))
@@ -170,32 +176,22 @@ if __name__ == '__main__':
     logger = logger()
     params = params()
 
-    params.temp_pt_file = "data/squad/data_1.pt"
+    test_on_train = params.test_on_train
+    pred_file = params.pred_file
+    gold_file = params.gold_file
 
     # 从已保存的pt文件中读取数据
     # 包括:vocab,训练集/验证集各自的输入/输出索引序列
     data = torch.load(params.temp_pt_file)
     vocab = data['vocab']
     params = data['params']
-    params.num_epochs = 15
-    params.print_results = False
-    params.print_loss = False
-    params.label_smoothing = True
-    params.learning_rate = 0.001
-    params.beam_size = 5
-    params.d_model = 128
-    params.rnnsearch = False
-    params.num_heads = 1
-    params.d_k = 64
-    params.dropout = 0.5
-    params.num_layers = 2
-    params.batch_size = 128
-    
-    # params.checkpoint_file = "checkpoint/squad/checkpoint_original.pt"
-    # params.model_statistics_file = "data/squad/model_statistics_original.pt"
 
-    # params.pred_file = "output/squad/pred_train.txt"
-    # params.gold_file = "output/squad/gold_train.txt"
+    if (test_on_train):
+        params.test_on_train = test_on_train
+        assert "train" in pred_file
+        assert "train" in gold_file
+        params.pred_file = pred_file
+        params.gold_file = gold_file
 
     if params.rnnsearch:
         from rnnsearch import Model

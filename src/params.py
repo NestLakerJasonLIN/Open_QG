@@ -40,9 +40,9 @@ def params():
     parser.add_argument('--answer_end_file', type=str, default='answer_end.txt', help='模型输出(答案结束位置)')
     parser.add_argument('--embedding_file', type=str, default='embedding.txt', help='词向量的文件位置')
     parser.add_argument('--vocab_file', type=str, default='vocab.txt', help='vocab位置')
-    parser.add_argument('--temp_pt_file', type=str, default='data_original.pt', help='暂存的pt文件位置')
-    parser.add_argument('--model_statistics_file', type=str, default='model_statistics_original.pt', help='暂存的pt文件位置')
-    parser.add_argument('--checkpoint_file', type=str, default='checkpoint_original.pt', help='输出的模型参数位置')
+    parser.add_argument('--temp_pt_file', type=str, default='data.pt', help='暂存的pt文件位置')
+    parser.add_argument('--model_statistics_file', type=str, default='model_statistics.pt', help='暂存的pt文件位置')
+    parser.add_argument('--checkpoint_file', type=str, default='checkpoint.pt', help='输出的模型参数位置')
     parser.add_argument('--pred_file', type=str, default='pred.txt', help='输出的预测文件位置')
     parser.add_argument('--gold_file', type=str, default='gold.txt', help='用于比较的真实文件位置')
 
@@ -64,6 +64,7 @@ def params():
     parser.add_argument('--label_smoothing', type=bool, default=True, help='是否使用标签平滑归一化')
     parser.add_argument('--answer_embeddings', type=bool, default=True, help='是否对在模型中答案进行编码')
     parser.add_argument('--with_copy', type=bool, default=True, help='是否使用copy机制')
+    parser.add_argument('--test_on_train', type=bool, default=False, help='whether test on train dataset')
 
     # 训练器超参数相关
     parser.add_argument('--num_epochs', type=int, default=1, help='模型超参数:num_epochs(模型训练/验证中设置)')
