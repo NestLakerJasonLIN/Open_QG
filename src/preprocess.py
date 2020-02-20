@@ -286,7 +286,7 @@ if __name__ == '__main__':
         "best_dev_loss": float("inf"),
         "epochs": 0,
         "best_epoch": -1,
-        "sampling_frequency" : 5,
+        "sampling_frequency" : 200,
         "sampling_training" : {},
         "sampling_dev": {}
     }

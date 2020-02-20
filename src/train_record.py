@@ -179,8 +179,10 @@ def one_epoch(params, vocab, loader, model, optimizer, epoch, model_statistics, 
     # 记录训练/验证的总损失
     total_loss = 0
 
-    model_statistics["sampling_training"][epoch] = []
-    model_statistics["sampling_dev"][epoch] = []
+    if (mode=="train"):
+        model_statistics["sampling_training"][epoch] = []
+    elif (mode=="dev"):
+        model_statistics["sampling_dev"][epoch] = []
 
     # 每一个batch的训练/验证
     for batch_index, batch in enumerate(tqdm(loader)):
