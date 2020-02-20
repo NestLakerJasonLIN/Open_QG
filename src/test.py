@@ -40,7 +40,7 @@ def prepare_dataloaders(params, data):
 
     # 构造test_loader
     if params.test_on_train:
-        test_dataset = Dataset(params, data, mode='train')
+        test_dataset = Dataset(params, data, mode='test_on_train')
     else:
         test_dataset = Dataset(params, data, mode='test')
     test_loader = torch.utils.data.DataLoader(

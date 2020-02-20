@@ -40,7 +40,7 @@ class Dataset(torch.utils.data.Dataset):
         self.test_answers = data['test_answers']
 
         # 断言: mode值一定在['train', 'dev', 'test']范围内
-        assert self.mode in ['train', 'dev', 'test']
+        assert self.mode in ['train', 'dev', 'test', 'test_on_train']
 
         # 断言: 训练集/验证集/测试集的输入输出数量必须一致
         assert len(self.train_input_indices) == len(self.train_output_indices)
@@ -83,6 +83,11 @@ class Dataset(torch.utils.data.Dataset):
                    self.test_output_indices[index], \
                    self.test_answers[index] if self.test_answers else None, \
                    self.vocab
+        elif self.mode == 'test_on_train':
+            return self.train_input_indices[index], \
+                   self.train_output_indices[index], \
+                   self.train_answers[index] if self.train_answers else None, \
+                   self.vocab
 
     def __len__(self):
         '''
@@ -100,7 +105,8 @@ class Dataset(torch.utils.data.Dataset):
             return len(self.dev_input_indices)
         elif self.mode == 'test':
             return len(self.test_input_indices)
-
+        elif self.mode == 'test_on_train':
+            return len(self.test_input_indices)
 
 def collate_fn(data):
     '''
