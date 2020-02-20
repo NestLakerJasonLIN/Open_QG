@@ -193,6 +193,10 @@ if __name__ == '__main__':
         params.pred_file = pred_file
         params.gold_file = gold_file
 
+    model_statistics = torch.load(params.model_statistics_file)
+
+    print("model statistics: \n{}\n".format(model_statistics))
+
     if params.rnnsearch:
         from rnnsearch import Model
     else:
