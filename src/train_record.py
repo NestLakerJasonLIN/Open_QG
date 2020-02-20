@@ -305,7 +305,7 @@ def one_epoch(params, vocab, loader, model, optimizer, epoch, model_statistics, 
                 "epoch" : epoch,
                 "input_gold" : input_gold,
                 "answer" : answer,
-                "ouptut_gold" : output_gold,
+                "output_gold" : output_gold,
                 "output_pred" : output_pred
             }
             if mode == "train":
