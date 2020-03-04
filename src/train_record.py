@@ -23,7 +23,7 @@ from params import params
 from vocab import Vocab
 from dataset import Dataset, collate_fn
 from optimizer import Optimizer
-
+from torch.utils.tensorboard import SummaryWriter
 
 def prepare_dataloaders(params, data):
     '''
@@ -66,7 +66,7 @@ def prepare_dataloaders(params, data):
     return train_loader, dev_loader
 
 
-def train_model(params, vocab, train_loader, dev_loader, model_statistics):
+def train_model(params, vocab, train_loader, dev_loader, model_statistics, writer):
     '''
     作用:
     训练和验证模型
@@ -114,6 +114,9 @@ def train_model(params, vocab, train_loader, dev_loader, model_statistics):
         model_statistics["training_losses"].append(training_total_loss)
         model_statistics["dev_losses"].append(dev_total_loss)
         model_statistics["epochs"] = epoch
+
+        # save loss to tensorboard
+        writer.add_scalars('loss', {'train': training_total_loss, 'val': dev_total_loss}, epoch)
 
         if training_total_loss < model_statistics["best_training_loss"]:
             model_statistics["best_training_loss"] = training_total_loss
@@ -321,11 +324,12 @@ def one_epoch(params, vocab, loader, model, optimizer, epoch, model_statistics, 
 
 if __name__ == '__main__':
 
-    torch.manual_seed(0)
-
     # 加载日志输出器和参数集合
     logger = logger()
     params = params()
+
+    # save input tensorboard_dir
+    writer = SummaryWriter("./runs/" + params.tensorboard_dir)
 
     # 从已保存的pt文件中读取数据
     # 包括:vocab,训练集/验证集各自的输入/输出索引序列
@@ -358,4 +362,4 @@ if __name__ == '__main__':
     train_loader, dev_loader = prepare_dataloaders(params, data)
 
     # 训练模型
-    train_model(params, vocab, train_loader, dev_loader, model_statistics)
+    train_model(params, vocab, train_loader, dev_loader, model_statistics, writer)

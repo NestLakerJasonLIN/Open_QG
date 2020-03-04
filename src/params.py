@@ -45,6 +45,7 @@ def params():
     parser.add_argument('--checkpoint_file', type=str, default='checkpoint.pt', help='输出的模型参数位置')
     parser.add_argument('--pred_file', type=str, default='pred.txt', help='输出的预测文件位置')
     parser.add_argument('--gold_file', type=str, default='gold.txt', help='用于比较的真实文件位置')
+    parser.add_argument('--tensorboard_dir', type=str, default='default', help='tensorboard experiment directory')
 
     # 打印相关
     parser.add_argument('--print_params', type=bool, default=False, help='是否打印参数列表')
