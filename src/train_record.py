@@ -9,6 +9,9 @@
 '''
 __author__ = 'yanwenl'
 
+import sys
+sys.path.append('evaluate')
+
 import json
 import os
 import shutil
@@ -24,6 +27,7 @@ from vocab import Vocab
 from dataset import Dataset, collate_fn
 from optimizer import Optimizer
 from torch.utils.tensorboard import SummaryWriter
+from eval import eval as bleu_eval
 
 def prepare_dataloaders(params, data):
     '''
@@ -106,17 +110,14 @@ def train_model(params, vocab, train_loader, dev_loader, model_statistics, write
     # 每一轮的训练和验证
     for epoch in range(1+curr_epoch, params.num_epochs + 1 + curr_epoch):
         # 一轮模型训练
-        model, _, training_total_loss = one_epoch(params, vocab, train_loader, model, optimizer, epoch, model_statistics, mode='train')
+        model, _, training_total_loss, train_output_list = one_epoch(params, vocab, train_loader, model, optimizer, epoch, model_statistics, mode='train')
         # 一轮模型验证
-        model, sentences_pred, dev_total_loss = one_epoch(params, vocab, dev_loader, model, optimizer, epoch, model_statistics, mode='dev')
+        model, sentences_pred, dev_total_loss, dev_output_list = one_epoch(params, vocab, dev_loader, model, optimizer, epoch, model_statistics, mode='dev')
 
         # 存储每一轮验证集的损失
         model_statistics["training_losses"].append(training_total_loss)
         model_statistics["dev_losses"].append(dev_total_loss)
         model_statistics["epochs"] = epoch
-
-        # save loss to tensorboard
-        writer.add_scalars('loss', {'train': training_total_loss, 'val': dev_total_loss}, epoch)
 
         if training_total_loss < model_statistics["best_training_loss"]:
             model_statistics["best_training_loss"] = training_total_loss
@@ -143,6 +144,38 @@ def train_model(params, vocab, train_loader, dev_loader, model_statistics, write
         # if total_loss == min(total_loss_epochs):
         #     torch.save(model.state_dict(), params.checkpoint_file)
         #     logger.info('第{}轮的模型参数已经保存至{}'.format(epoch, params.checkpoint_file))
+
+        # calculate BLEU scores
+        if not os.path.exists(params.output_dir):
+            os.makedirs(params.output_dir)
+
+        def write_output_file(mode, epoch, type, lst):
+            orig_filename = params.gold_file if type == "gold" else params.pred_file
+            filename = "{}_{}_{}.txt".format(orig_filename.replace(".txt", ""), mode, epoch)
+
+            f = open(filename, 'w')
+            for sentence in lst:
+                f.write(sentence + '\n')
+            f.close()
+
+            return filename
+
+        # 依次写入文件
+        epoch_train_pred_file = write_output_file("train", epoch, "pred", train_output_list["pred"])
+        epoch_train_gold_file = write_output_file("train", epoch, "gold", train_output_list["gold"])
+        epoch_dev_pred_file = write_output_file("dev", epoch, "pred", dev_output_list["pred"])
+        epoch_dev_gold_file = write_output_file("dev", epoch, "gold", dev_output_list["gold"])
+
+        bleu = eval(epoch_train_pred_file, epoch_train_gold_file, epoch_train_gold_file,
+                          epoch_dev_pred_file, epoch_dev_gold_file, epoch_dev_gold_file)
+
+        model_statistics["bleu"].append(bleu)
+
+        # save bleu to tensorboard
+        writer.add_scalars('bleu', bleu, epoch)
+        # save loss to tensorboard
+        writer.add_scalars('loss', {'train': training_total_loss, 'val': dev_total_loss}, epoch)
+        writer.flush()
 
 
 def one_epoch(params, vocab, loader, model, optimizer, epoch, model_statistics, mode='train'):
@@ -186,6 +219,9 @@ def one_epoch(params, vocab, loader, model, optimizer, epoch, model_statistics, 
         model_statistics["sampling_training"][epoch] = []
     elif (mode=="dev"):
         model_statistics["sampling_dev"][epoch] = []
+
+    # store a list of output sentence for pred and gold
+    output_list = {"gold" : [], "pred" : []}
 
     # 每一个batch的训练/验证
     for batch_index, batch in enumerate(tqdm(loader)):
@@ -316,11 +352,35 @@ def one_epoch(params, vocab, loader, model, optimizer, epoch, model_statistics, 
             if mode == "dev":
                 model_statistics["sampling_dev"][epoch].append(sample)
 
+        output_list["gold"].append(output_gold)
+        output_list["pred"].append(output_pred)
+
     # 计算总损失
     total_loss = total_loss / total_examples
 
-    return model, sentences_pred, total_loss
+    return model, sentences_pred, total_loss, output_list
 
+# a wrapper for bleu eval to make result as a dict
+def eval(train_out_file, train_src_file, train_tgt_file,
+         dev_out_file, dev_src_file, dev_tgt_file,
+         isDIn = False, num_pairs = 500):
+
+    print("train:")
+    train_result = bleu_eval(train_out_file, train_src_file, train_tgt_file, isDIn, num_pairs)
+    print("dev:")
+    dev_result = bleu_eval(dev_out_file, dev_src_file, dev_tgt_file, isDIn, num_pairs)
+
+    ret = {"train_Bleu_1" : train_result[0] * 100,
+           "train_Bleu_2" : train_result[1] * 100,
+           "train_Bleu_3" : train_result[2] * 100,
+           "train_Bleu_4" : train_result[3] * 100,
+           "dev_Bleu_1": dev_result[0] * 100,
+           "dev_Bleu_2": dev_result[1] * 100,
+           "dev_Bleu_3": dev_result[2] * 100,
+           "dev_Bleu_4": dev_result[3] * 100,
+           }
+
+    return ret
 
 if __name__ == '__main__':
 
@@ -363,3 +423,5 @@ if __name__ == '__main__':
 
     # 训练模型
     train_model(params, vocab, train_loader, dev_loader, model_statistics, writer)
+
+    writer.close()

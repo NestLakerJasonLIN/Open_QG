@@ -15,8 +15,8 @@ from argparse import ArgumentParser
 
 import os
 import sys
-reload(sys)
-sys.setdefaultencoding('utf-8')
+# reload(sys)
+# sys.setdefaultencoding('utf-8')
 
 current_dir = os.path.abspath(os.path.dirname(__file__))
 src_dir = os.path.join(current_dir, '..', 'src')
@@ -32,8 +32,8 @@ class QGEvalCap:
         output = []
         scorers = [
             (Bleu(4), ["Bleu_1", "Bleu_2", "Bleu_3", "Bleu_4"]),
-            (Meteor(),"METEOR"),
-            (Rouge(), "ROUGE_L"),
+            # (Meteor(),"METEOR"),
+            # (Rouge(), "ROUGE_L"),
             # (Cider(), "CIDEr")
         ]
 
