@@ -11,6 +11,8 @@ python3 src/preprocess.py \
 --gold_file gold_$ID.txt \
 --print_params PRINT_PARAMS \
 --num_epochs $EPOCH \
+#--beam_size 1
+#--no_copy
 #--params.d_model 128 \
 #--params.num_heads 1 \
 #--params.d_k 64 \

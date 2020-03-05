@@ -64,7 +64,7 @@ def params():
     parser.add_argument('--load_model', type=bool, default=True, help='是否加载训练好的模型参数')
     parser.add_argument('--label_smoothing', type=bool, default=True, help='是否使用标签平滑归一化')
     parser.add_argument('--answer_embeddings', type=bool, default=True, help='是否对在模型中答案进行编码')
-    parser.add_argument('--with_copy', type=bool, default=True, help='是否使用copy机制')
+    parser.add_argument('--no_copy', dest='with_copy', action='store_false')
     parser.add_argument('--test_on_train', type=bool, default=False, help='whether test on train dataset')
 
     # 训练器超参数相关
