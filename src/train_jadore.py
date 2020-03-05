@@ -407,8 +407,6 @@ if __name__ == '__main__':
 
     print("model statistics: \n{}\n".format(model_statistics))
 
-    params.device = "cpu"
-
     # 打印参数列表
     if params.print_params:
         logger.info('参数列表:{}'.format(params))
