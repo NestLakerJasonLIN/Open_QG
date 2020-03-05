@@ -122,50 +122,52 @@ def one_epoch(params, vocab, loader, model):
     '''
 
     logger.info('测试阶段')
-    model.eval()
 
-    # 我们保存所有得到的输出序列
-    sentences_pred = []
+    with torch.no_grad():
+        model.eval()
 
-    # 每一个batch的测试
-    for batch_index, batch in enumerate(tqdm(loader)):
-        # 从数据中读取模型的输入和输出
-        input_indices = batch[0].to(params.device)
-        output_indices = batch[1].to(params.device)
-        if torch.is_tensor(batch[2]):
-            answer_indices = batch[2].to(params.device)
-        else:
-            answer_indices = None
-        # input_indices: [batch_size, input_seq_len]
-        # output_indices: [batch_size, output_seq_len]
-        # answer_indices: [batch_size, output_seq_len]
+        # 我们保存所有得到的输出序列
+        sentences_pred = []
 
-        # 使用beam_search算法,以<s>作为开始符得到完整的预测序列
-        generator = Generator(params, model)
-        indices_pred, scores_pred = generator.generate_batch(input_indices, src_ans=answer_indices)
-        # indices_pred: [batch_size, beam_size, output_seq_len]
+        # 每一个batch的测试
+        for batch_index, batch in enumerate(tqdm(loader)):
+            # 从数据中读取模型的输入和输出
+            input_indices = batch[0].to(params.device)
+            output_indices = batch[1].to(params.device)
+            if torch.is_tensor(batch[2]):
+                answer_indices = batch[2].to(params.device)
+            else:
+                answer_indices = None
+            # input_indices: [batch_size, input_seq_len]
+            # output_indices: [batch_size, output_seq_len]
+            # answer_indices: [batch_size, output_seq_len]
 
-        # 输出预测序列
-        for indices in indices_pred:
-            # indices[0]表示beam_size中分数最高的那个输出
-            sentence = vocab.convert_index2sentence(indices[0])
-            sentences_pred.append(' '.join(sentence))
+            # 使用beam_search算法,以<s>作为开始符得到完整的预测序列
+            generator = Generator(params, model)
+            indices_pred, scores_pred = generator.generate_batch(input_indices, src_ans=answer_indices)
+            # indices_pred: [batch_size, beam_size, output_seq_len]
 
-        # 为了便于测试,在测试阶段也可以把预测序列打印出来
-        if params.print_results:
-            input_gold = ' '.join(vocab.convert_index2sentence(input_indices[-1]))
-            logger.info('真实输入序列 : {}'.format(input_gold))
+            # 输出预测序列
+            for indices in indices_pred:
+                # indices[0]表示beam_size中分数最高的那个输出
+                sentence = vocab.convert_index2sentence(indices[0])
+                sentences_pred.append(' '.join(sentence))
 
-            if torch.is_tensor(answer_indices):
-                answer = answer_indices[-1] * input_indices[-1]
-                answer = ' '.join(vocab.convert_index2sentence(answer, full=True))
-                logger.info('真实答案序列 : {}'.format(answer))
+            # 为了便于测试,在测试阶段也可以把预测序列打印出来
+            if params.print_results:
+                input_gold = ' '.join(vocab.convert_index2sentence(input_indices[-1]))
+                logger.info('真实输入序列 : {}'.format(input_gold))
 
-            output_gold = ' '.join(vocab.convert_index2sentence(output_indices[-1]))
-            logger.info('真实输出序列 : {}'.format(output_gold))
+                if torch.is_tensor(answer_indices):
+                    answer = answer_indices[-1] * input_indices[-1]
+                    answer = ' '.join(vocab.convert_index2sentence(answer, full=True))
+                    logger.info('真实答案序列 : {}'.format(answer))
 
-            output_pred = sentences_pred[-1]
-            logger.info('预测输出序列 : {}'.format(output_pred))
+                output_gold = ' '.join(vocab.convert_index2sentence(output_indices[-1]))
+                logger.info('真实输出序列 : {}'.format(output_gold))
+
+                output_pred = sentences_pred[-1]
+                logger.info('预测输出序列 : {}'.format(output_pred))
 
     return sentences_pred
 

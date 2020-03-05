@@ -110,9 +110,9 @@ def train_model(params, vocab, train_loader, dev_loader, model_statistics, write
     # 每一轮的训练和验证
     for epoch in range(1+curr_epoch, params.num_epochs + 1 + curr_epoch):
         # 一轮模型训练
-        model, _, training_total_loss, train_output_list = one_epoch(params, vocab, train_loader, model, optimizer, epoch, model_statistics, mode='train')
+        model, _, training_total_loss, train_output_list = one_epoch_train(params, vocab, train_loader, model, optimizer, epoch, model_statistics)
         # 一轮模型验证
-        model, sentences_pred, dev_total_loss, dev_output_list = one_epoch(params, vocab, dev_loader, model, optimizer, epoch, model_statistics, mode='dev')
+        model, sentences_pred, dev_total_loss, dev_output_list = one_epoch_dev(params, vocab, dev_loader, model, optimizer, epoch, model_statistics)
 
         # 存储每一轮验证集的损失
         model_statistics["training_losses"].append(training_total_loss)
@@ -177,8 +177,7 @@ def train_model(params, vocab, train_loader, dev_loader, model_statistics, write
         writer.add_scalars('loss', {'train': training_total_loss, 'val': dev_total_loss}, epoch)
         writer.flush()
 
-
-def one_epoch(params, vocab, loader, model, optimizer, epoch, model_statistics, mode='train'):
+def one_epoch_dev(params, vocab, loader, model, optimizer, epoch, model_statistics):
     '''
     作用:
     每一轮的训练/验证
@@ -200,13 +199,176 @@ def one_epoch(params, vocab, loader, model, optimizer, epoch, model_statistics, 
     '''
 
     # 断言: mode值一定在['train', 'dev']范围内
-    assert mode in ['train', 'dev']
-    if mode == 'train':
-        logger.info('训练阶段,第{}轮'.format(epoch))
-        model.train()
-    elif mode == 'dev':
-        logger.info('验证阶段,第{}轮'.format(epoch))
+    logger.info('验证阶段,第{}轮'.format(epoch))
+
+    with torch.no_grad():
         model.eval()
+
+        # 对于验证阶段,我们保存所有得到的输出序列
+        sentences_pred = []
+        # 记录训练/验证的总样例数
+        total_examples = 0
+        # 记录训练/验证的总损失
+        total_loss = 0
+
+        model_statistics["sampling_dev"][epoch] = []
+
+        # store a list of output sentence for pred and gold
+        output_list = {"gold" : [], "pred" : []}
+
+        # 每一个batch的训练/验证
+        for batch_index, batch in enumerate(tqdm(loader)):
+            # 从数据中读取模型的输入和输出
+            input_indices = batch[0].to(params.device)
+            output_indices = batch[1].to(params.device)
+            if torch.is_tensor(batch[2]):
+                answer_indices = batch[2].to(params.device)
+            else:
+                answer_indices = None
+            # input_indices: [batch_size, input_seq_len]
+            # output_indices: [batch_size, output_seq_len]
+            # answer_indices: [batch_size, output_seq_len]
+
+            # 模型:通过模型输入来预测真实输出,即
+            #  <s>  1   2   3
+            #  --------------->
+            #   1   2   3  </s>
+            # 真实输出是在原始数据的基础上"去头"(decoder部分的输出)
+            # 原始数据: <s> 1 2 3 </s>
+            # 真实输出: 1 2 3 </s>
+            output_indices_gold = output_indices[:, 1:]
+            # 模型输入是在原始数据的基础上"去尾"(decoder部分的输入)
+            # 原始数据: <s> 1 2 3 </s>
+            # 真实输出: <s> 1 2 3
+            output_indices = output_indices[:, :-1]
+
+            # 将输入数据导入模型,得到预测的输出数据
+            output_indices_pred = model(input_indices, output_indices, answer_indices=answer_indices)
+            # output_indices_pred: [batch_size, output_seq_len, vocab_size]
+
+            # 将基于vocab的概率分布,通过取最大值的方式得到预测的输出序列
+            indices_pred = torch.max(output_indices_pred, dim=-1)[1]
+            # indices_pred: [batch_size, output_seq_len]
+
+            # 输出预测序列
+            for indices in indices_pred:
+                # full: True表示输出完整序列
+                #       False表示遇到</s>就停止(只输出到</s>前的序列)
+                sentence = vocab.convert_index2sentence(indices, full=False)
+                sentences_pred.append(' '.join(sentence))
+
+            # 利用预测输出和真实输出计算损失
+            # softmax在模型中已经做了,因此还需要自己做一下log
+            # output_indices_pred = F.log_softmax(output_indices_pred, dim=-1)
+            output_indices_pred = torch.log(output_indices_pred)
+            # output_indices_pred: [batch_size, output_seq_len, vocab_size]
+            # output_indices_gold: [batch_size, output_seq_len]
+            if params.label_smoothing:
+                # 自己编写损失函数
+                # 使用标签平滑归一化
+                batch_size = output_indices_pred.size(0)
+                output_seq_len = output_indices_pred.size(1)
+                vocab_size = output_indices_pred.size(2)
+
+                # 调整维度
+                output_indices_pred = output_indices_pred.contiguous().view(batch_size * output_seq_len, vocab_size)
+                output_indices_gold = output_indices_gold.contiguous().view(batch_size * output_seq_len).unsqueeze(1)
+                # output_indices_pred: [batch_size * output_seq_len, vocab_size]
+                # output_indices_gold: [batch_size * output_seq_len, 1]
+
+                # 计算损失
+                nll_loss = -output_indices_pred.gather(dim=-1, index=output_indices_gold)
+                smooth_loss = -output_indices_pred.sum(dim=-1, keepdim=True)
+                # nll_loss: [batch_size * output_seq_len]
+                # smooth_loss: [batch_size * output_seq_len]
+
+                # 通过取平均的方式得到损失
+                nll_loss = nll_loss.mean()
+                smooth_loss = smooth_loss.mean()
+
+                # 使用标签平滑归一化,得到最终损失
+                eps_i = params.label_smoothing_eps / vocab_size
+                loss = (1 - params.label_smoothing_eps) * nll_loss + eps_i * smooth_loss
+            else:
+                # 使用内置的损失函数
+                # NLLLoss(x,y)的两个参数:
+                # x: [batch_size, num_classes, ……], 类型为LongTensor, 是预测输出
+                # y: [batch_size, ……], 类型为LongTensor, 是真实输出
+                criterion = torch.nn.NLLLoss(ignore_index=vocab.word2index['<pad>'])
+
+                output_indices_pred = output_indices_pred.permute(0, 2, 1)
+                # output_indices_pred: [batch_size, vocab_size, output_seq_len]
+                # output_indices_gold: [batch_size, output_seq_len]
+                loss = criterion(output_indices_pred, output_indices_gold)
+
+            # 计算到当前为止的总样例数和总损失
+            num_examples = input_indices.size(0)
+            total_examples += num_examples
+            total_loss += loss.item() * num_examples
+
+            # 如果参数中设置了打印模型损失,则打印模型损失
+            if params.print_loss:
+                logger.info('Epoch : {}, batch : {}/{}, loss : {}'.format(epoch, batch_index, len(loader), loss))
+
+            # 为了便于测试,在训练/验证阶段也可以把预测序列打印出来
+            input_gold = ' '.join(vocab.convert_index2sentence(input_indices[-1]))
+            answer = None
+            if torch.is_tensor(answer_indices):
+                answer = answer_indices[-1] * input_indices[-1]
+                answer = ' '.join(vocab.convert_index2sentence(answer, full=True))
+            output_gold = ' '.join(vocab.convert_index2sentence(output_indices[-1]))
+            output_pred = sentences_pred[-1]
+
+            if params.print_results:
+                logger.info('真实输入序列 : {}'.format(input_gold))
+                if torch.is_tensor(answer_indices):
+                    logger.info('真实答案序列 : {}'.format(answer))
+                logger.info('真实输出序列 : {}'.format(output_gold))
+                logger.info('预测输出序列 : {}'.format(output_pred))
+
+            if batch_index % model_statistics["sampling_frequency"] == 0:
+                sample = {
+                    "epoch" : epoch,
+                    "input_gold" : input_gold,
+                    "answer" : answer,
+                    "output_gold" : output_gold,
+                    "output_pred" : output_pred
+                }
+
+                model_statistics["sampling_dev"][epoch].append(sample)
+
+            output_list["gold"].append(output_gold)
+            output_list["pred"].append(output_pred)
+
+    # 计算总损失
+    total_loss = total_loss / total_examples
+
+    return model, sentences_pred, total_loss, output_list
+
+def one_epoch_train(params, vocab, loader, model, optimizer, epoch, model_statistics):
+    '''
+    作用:
+    每一轮的训练/验证
+
+    输入参数:
+    params: 参数集合
+    vocab: 从pt文件中读取的该任务所使用的vocab
+    loader: 训练集/验证集的dataloader
+    model: 当前使用模型
+    optimizer: 当前使用优化器
+    epoch: 当前轮数
+    mode: train表示是训练阶段
+          dev表示是验证阶段
+
+    输出参数:
+    model: 训练/验证结束时得到的模型
+    sentences_pred: 验证结束时得到的预测序列集合(只有验证时有内容,训练时为空list)
+    total_loss: 总损失
+    '''
+
+    # 断言: mode值一定在['train', 'dev']范围内
+    logger.info('训练阶段,第{}轮'.format(epoch))
+    model.train()
 
     # 对于验证阶段,我们保存所有得到的输出序列
     sentences_pred = []
@@ -215,10 +377,7 @@ def one_epoch(params, vocab, loader, model, optimizer, epoch, model_statistics, 
     # 记录训练/验证的总损失
     total_loss = 0
 
-    if (mode=="train"):
-        model_statistics["sampling_training"][epoch] = []
-    elif (mode=="dev"):
-        model_statistics["sampling_dev"][epoch] = []
+    model_statistics["sampling_training"][epoch] = []
 
     # store a list of output sentence for pred and gold
     output_list = {"gold" : [], "pred" : []}
@@ -318,10 +477,9 @@ def one_epoch(params, vocab, loader, model, optimizer, epoch, model_statistics, 
             logger.info('Epoch : {}, batch : {}/{}, loss : {}'.format(epoch, batch_index, len(loader), loss))
 
         # 如果是训练阶段,就利用优化器进行BP反向传播,更新参数
-        if mode == 'train':
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
 
         # 为了便于测试,在训练/验证阶段也可以把预测序列打印出来
         input_gold = ' '.join(vocab.convert_index2sentence(input_indices[-1]))
@@ -347,10 +505,8 @@ def one_epoch(params, vocab, loader, model, optimizer, epoch, model_statistics, 
                 "output_gold" : output_gold,
                 "output_pred" : output_pred
             }
-            if mode == "train":
-                model_statistics["sampling_training"][epoch].append(sample)
-            if mode == "dev":
-                model_statistics["sampling_dev"][epoch].append(sample)
+
+            model_statistics["sampling_training"][epoch].append(sample)
 
         output_list["gold"].append(output_gold)
         output_list["pred"].append(output_pred)
