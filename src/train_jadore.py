@@ -102,7 +102,7 @@ def train_model(params, vocab, train_loader, dev_loader, model_statistics, write
         model, _, training_total_loss, train_output_list = train_epoch(params, vocab, train_loader, model, optimizer, epoch, model_statistics)
                 
         # 一轮模型验证
-        model, sentences_pred, dev_total_loss, dev_output_list = eval_epoch(params, vocab, dev_loader, model, optimizer, epoch, model_statistics, mode='dev')
+        model, sentences_pred, dev_total_loss, dev_output_list = eval_epoch(params, vocab, dev_loader, model, optimizer, epoch, model_statistics)
 
         # 存储每一轮验证集的损失
         model_statistics["training_losses"].append(training_total_loss)
@@ -243,7 +243,7 @@ def eval_epoch(params, vocab, loader, model, optimizer, epoch, model_statistics)
     # 记录训练/验证的总损失
     total_loss = 0
 
-    model_statistics["sampling_training"][epoch] = []
+    model_statistics["sampling_dev"][epoch] = []
 
     # store a list of output sentence for pred and gold
     output_list = {"gold" : [], "pred" : []}
@@ -331,8 +331,8 @@ def track_predictions(params, vocab, epoch, batch_index,
     # input shape: (batch_size * src_len, vocab_size)
     
     sentences_pred = []
-
-    pred = output_indices_pred.reshape(params.batch_size, -1, len(vocab))    
+    bs = input_indices.size(0)
+    pred = output_indices_pred.reshape(bs, -1, len(vocab))    
 
     # 将基于vocab的概率分布,通过取最大值的方式得到预测的输出序列
     indices_pred = torch.max(pred, dim=-1)[1]
