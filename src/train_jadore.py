@@ -1,7 +1,7 @@
 __author__ = 'yanwenl'
 
 import sys
-sys.path.append("../evaluate/")
+sys.path.append('evaluate')
 
 from tqdm import tqdm
 import os
@@ -16,7 +16,7 @@ from logger import logger
 from params import params
 from dataset import Dataset, collate_fn
 from torch.utils.tensorboard import SummaryWriter
-
+from eval import eval as bleu_eval
 
 def prepare_dataloaders(params, data):
     '''
@@ -378,7 +378,27 @@ def track_predictions(params, vocab, epoch, batch_index,
 
     return sentences_pred
 
-# TODO: change to params
+# a wrapper for bleu eval to make result as a dict
+def eval(train_out_file, train_src_file, train_tgt_file,
+         dev_out_file, dev_src_file, dev_tgt_file,
+         isDIn = False, num_pairs = 500):
+
+    print("train:")
+    train_result = bleu_eval(train_out_file, train_src_file, train_tgt_file, isDIn, num_pairs)
+    print("dev:")
+    dev_result = bleu_eval(dev_out_file, dev_src_file, dev_tgt_file, isDIn, num_pairs)
+
+    ret = {"train_Bleu_1" : train_result[0] * 100,
+           "train_Bleu_2" : train_result[1] * 100,
+           "train_Bleu_3" : train_result[2] * 100,
+           "train_Bleu_4" : train_result[3] * 100,
+           "dev_Bleu_1": dev_result[0] * 100,
+           "dev_Bleu_2": dev_result[1] * 100,
+           "dev_Bleu_3": dev_result[2] * 100,
+           "dev_Bleu_4": dev_result[3] * 100,
+           }
+
+    return ret
 
 if __name__ == '__main__':
 
