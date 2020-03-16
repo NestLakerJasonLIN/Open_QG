@@ -40,7 +40,7 @@ class Generator(object):
             return beamed_tensor
 
         def collate_active_info(
-                src_seq, src_enc, inst_idx_to_position_map, active_inst_idx_list):
+                src_seq, src_enc, src_ans, ans_enc, inst_idx_to_position_map, active_inst_idx_list):
             # Sentences which are still active are collected,
             # so the decoder will not run on completed sentences.
             n_prev_active_inst = len(inst_idx_to_position_map)
@@ -49,12 +49,14 @@ class Generator(object):
 
             active_src_seq = collect_active_part(src_seq, active_inst_idx, n_prev_active_inst, n_bm)
             active_src_enc = collect_active_part(src_enc, active_inst_idx, n_prev_active_inst, n_bm)
+            active_src_ans = collect_active_part(src_ans, active_inst_idx, n_prev_active_inst, n_bm)
+            active_ans_enc = collect_active_part(ans_enc, active_inst_idx, n_prev_active_inst, n_bm)
             active_inst_idx_to_position_map = get_inst_idx_to_tensor_position_map(active_inst_idx_list)
 
-            return active_src_seq, active_src_enc, active_inst_idx_to_position_map
+            return active_src_seq, active_src_enc, active_src_ans, active_ans_enc, active_inst_idx_to_position_map
 
         def beam_decode_step(
-                inst_dec_beams, len_dec_seq, src_seq, enc_output, inst_idx_to_position_map, n_bm):
+                inst_dec_beams, len_dec_seq, src_seq, enc_output, src_ans, ans_enc, inst_idx_to_position_map, n_bm):
             ''' Decode and update beam status, and then return active beam idx '''
 
             def prepare_beam_dec_seq(inst_dec_beams, len_dec_seq):
@@ -68,8 +70,8 @@ class Generator(object):
                 dec_partial_pos = dec_partial_pos.unsqueeze(0).repeat(n_active_inst * n_bm, 1)
                 return dec_partial_pos
 
-            def predict_word(dec_seq, src_seq, enc_output, n_active_inst, n_bm):
-                dec_output = self.model.decoder(dec_seq, src_seq, enc_output)
+            def predict_word(dec_seq, src_seq, enc_output, src_ans, ans_enc, n_active_inst, n_bm):
+                dec_output = self.model.decoder(dec_seq, src_seq, enc_output, src_ans, ans_enc)
                 dec_output = dec_output[:, -1, :]  # Pick the last step: (bh * bm) * d_h
                 word_prob = F.log_softmax(dec_output, dim=1)
                 word_prob = word_prob.view(n_active_inst, n_bm, -1)
@@ -89,7 +91,7 @@ class Generator(object):
 
             dec_seq = prepare_beam_dec_seq(inst_dec_beams, len_dec_seq)
             dec_pos = prepare_beam_dec_pos(len_dec_seq, n_active_inst, n_bm)
-            word_prob = predict_word(dec_seq, src_seq, enc_output, n_active_inst, n_bm)
+            word_prob = predict_word(dec_seq, src_seq, enc_output, src_ans, ans_enc, n_active_inst, n_bm)
 
             # Update the beam with predicted word prob information and collect incomplete instances
             active_inst_idx_list = collect_active_inst_idx_list(
@@ -109,13 +111,18 @@ class Generator(object):
 
         with torch.no_grad():
             #-- Encode
-            src_enc = self.model.encoder(src_seq, src_ans)
+            src_enc, ans_enc = self.model.encoder(src_seq, src_ans)
 
             #-- Repeat data for beam search
             n_bm = self.params.beam_size # beam_size
             n_inst, len_s, d_h = src_enc.size()
             src_seq = src_seq.repeat(1, n_bm).view(n_inst * n_bm, len_s)
             src_enc = src_enc.repeat(1, n_bm, 1).view(n_inst * n_bm, len_s, d_h)
+            n_inst_ans, len_s_ans, d_h_ans = ans_enc.size()
+            assert n_inst_ans == n_inst
+            assert d_h_ans == d_h
+            src_ans = src_ans.repeat(1, n_bm).view(n_inst_ans * n_bm, len_s_ans)
+            ans_enc = ans_enc.repeat(1, n_bm, 1).view(n_inst_ans * n_bm, len_s_ans, d_h_ans)
 
             #-- Prepare beams
             inst_dec_beams = [Beam(n_bm, device=self.params.device) for _ in range(n_inst)]
@@ -127,15 +134,14 @@ class Generator(object):
             #-- Decode
             # max_token_seq_len + 1
             for len_dec_seq in range(1, self.params.max_seq_len):
-
                 active_inst_idx_list = beam_decode_step(
-                    inst_dec_beams, len_dec_seq, src_seq, src_enc, inst_idx_to_position_map, n_bm)
+                    inst_dec_beams, len_dec_seq, src_seq, src_enc, src_ans, ans_enc, inst_idx_to_position_map, n_bm)
 
                 if not active_inst_idx_list:
                     break  # all instances have finished their path to <EOS>
 
-                src_seq, src_enc, inst_idx_to_position_map = collate_active_info(
-                    src_seq, src_enc, inst_idx_to_position_map, active_inst_idx_list)
+                src_seq, src_enc, src_ans, ans_enc, inst_idx_to_position_map = collate_active_info(
+                    src_seq, src_enc, src_ans, ans_enc, inst_idx_to_position_map, active_inst_idx_list)
 
         batch_hyp, batch_scores = collect_hypothesis_and_scores(inst_dec_beams, 5)
 

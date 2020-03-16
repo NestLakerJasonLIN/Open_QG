@@ -202,7 +202,7 @@ if __name__ == '__main__':
     if params.rnnsearch:
         from rnnsearch import Model
     else:
-        from transformer import Model
+        from transformer_ans import Model
 
     # 打印参数列表
     if params.print_params:
