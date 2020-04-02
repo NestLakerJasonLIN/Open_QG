@@ -74,9 +74,9 @@ class Encoder(nn.Module):
         self.utils = Utils(self.params)
 
         # embedding层,将索引/位置信息转换为词向量
-        self.word_embedding_encoder = nn.Embedding(self.vocab_size, self.params.d_model)
-        self.position_embedding_encoder = nn.Embedding(self.vocab_size, self.params.d_model)
-        self.answer_embedding_encoder = nn.Embedding(2, self.params.d_model)
+        self.word_embedding_encoder = nn.Embedding(self.vocab_size, self.params.d_model - 32)
+        self.position_embedding_encoder = nn.Embedding(self.vocab_size, self.params.d_model - 32)
+        self.answer_embedding_encoder = nn.Embedding(2, 32)
 
         # 如果有预训练的词向量,则使用预训练的词向量进行权重初始化
         if self.params.load_embeddings:
@@ -109,7 +109,7 @@ class Encoder(nn.Module):
 
         # 如果有答案信息,就转换为词向量
         if torch.is_tensor(answer_indices):
-            input_indices += self.answer_embedding_encoder(answer_indices)
+            input_indices = torch.cat((input_indices, self.answer_embedding_encoder(answer_indices)), -1)
 
         # 经过多个相同子结构组成的decoder子层,层数为num_layers
         for encoder_layer in self.encoder_layers:
