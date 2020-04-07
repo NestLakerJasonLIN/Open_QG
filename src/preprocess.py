@@ -115,6 +115,8 @@ def build_vocab(params, vocab_file, sentences):
     # 将word_freq按词频排序
     word_freq = sorted(word_freq.items(), key=lambda word: word[1], reverse=True)
 
+    word_freq = word_freq[:20000]
+
     # 输出文件
     f_vocab = open(vocab_file, 'w')
 
