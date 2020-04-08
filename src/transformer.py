@@ -75,7 +75,7 @@ class Encoder(nn.Module):
 
         # embedding层,将索引/位置信息转换为词向量
         self.word_embedding_encoder = nn.Embedding(self.vocab_size, self.params.d_model)
-        self.position_embedding_encoder = nn.Embedding(self.vocab_size, self.params.d_model)
+        self.position_embedding_encoder = nn.Embedding(self.params.max_seq_len+2, self.params.d_model)
         self.answer_embedding_encoder = nn.Embedding(2, self.params.d_model)
 
         # 如果有预训练的词向量,则使用预训练的词向量进行权重初始化
@@ -103,8 +103,10 @@ class Encoder(nn.Module):
         # encoder_self_attention_masks: [batch_size, input_seq_len, input_seq_len]
 
         # 将索引/位置信息转换为词向量
-        input_indices = self.word_embedding_encoder(input_indices) * np.sqrt(self.params.d_model) + \
-                        self.position_embedding_encoder(input_indices)
+        input_positions = torch.arange(input_indices.size(1)).repeat(input_indices.size(0), 1).to(self.params.device)
+        assert input_indices.shape == input_positions.shape
+        input_pos_emb = self.position_embedding_encoder(input_positions)
+        input_indices = self.word_embedding_encoder(input_indices) * np.sqrt(self.params.d_model) + input_pos_emb
         # input_indices: [batch_size, input_seq_len, d_model]
 
         # 如果有答案信息,就转换为词向量
@@ -141,7 +143,7 @@ class Decoder(nn.Module):
 
         # embedding层,将索引/位置信息转换为词向量
         self.word_embedding_decoder = nn.Embedding(self.vocab_size, self.params.d_model)
-        self.position_embedding_decoder = nn.Embedding(self.vocab_size, self.params.d_model)
+        self.position_embedding_decoder = nn.Embedding(self.params.max_seq_len+2, self.params.d_model)
 
         # 如果有预训练的词向量,则使用预训练的词向量进行权重初始化
         if self.params.load_embeddings:
@@ -178,8 +180,10 @@ class Decoder(nn.Module):
         # decoder_self_attention_masks: [batch_size, output_seq_len, output_seq_len]
 
         # 将索引/位置信息转换为词向量
-        output_indices = self.word_embedding_decoder(output_indices) * np.sqrt(self.params.d_model) + \
-                         self.position_embedding_decoder(output_indices)
+        output_positions = torch.arange(output_indices.size(1)).repeat(output_indices.size(0), 1).to(self.params.device)
+        assert output_indices.shape == output_positions.shape
+        output_pos_emb = self.position_embedding_decoder(output_positions)
+        output_indices = self.word_embedding_decoder(output_indices) * np.sqrt(self.params.d_model) + output_pos_emb
         # output_indices: [batch_size, output_seq_len, d_model]
 
         # 经过多个相同子结构组成的decoder子层,层数为num_layers
