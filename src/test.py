@@ -154,7 +154,7 @@ def one_epoch(params, vocab, loader, model):
                 sentences_pred.append(' '.join(sentence))
 
             # 为了便于测试,在测试阶段也可以把预测序列打印出来
-            if params.print_results:
+            if batch_index % 50 == 0:
                 input_gold = ' '.join(vocab.convert_index2sentence(input_indices[-1]))
                 logger.info('真实输入序列 : {}'.format(input_gold))
 

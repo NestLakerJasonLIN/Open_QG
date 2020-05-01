@@ -28,6 +28,7 @@ from dataset import Dataset, collate_fn
 from optimizer import Optimizer
 from torch.utils.tensorboard import SummaryWriter
 from eval import eval as bleu_eval
+from beam import Generator
 
 def prepare_dataloaders(params, data):
     '''
@@ -164,11 +165,14 @@ def train_model(params, vocab, train_loader, dev_loader, model_statistics, write
         epoch_train_pred_file = write_output_file("train", epoch, "pred", train_output_list["pred"])
         epoch_train_gold_file = write_output_file("train", epoch, "gold", train_output_list["gold"])
         epoch_dev_pred_file = write_output_file("dev", epoch, "pred", dev_output_list["pred"])
+        epoch_dev_pred_generate_file = write_output_file("dev_g", epoch, "pred", dev_output_list["pred_generate"])
         epoch_dev_gold_file = write_output_file("dev", epoch, "gold", dev_output_list["gold"])
 
-        bleu = eval(epoch_train_pred_file, epoch_train_gold_file, epoch_train_gold_file,
-                          epoch_dev_pred_file, epoch_dev_gold_file, epoch_dev_gold_file)
+        bleu_train = eval("train", epoch_train_pred_file, epoch_train_gold_file, epoch_train_gold_file)
+        bleu_dev = eval("dev", epoch_dev_pred_file, epoch_dev_gold_file, epoch_dev_gold_file)
+        bleu_dev_g = eval("dev_g", epoch_dev_pred_generate_file, epoch_dev_gold_file, epoch_dev_gold_file)
 
+        bleu = {**bleu_train, **bleu_dev, **bleu_dev_g}
         model_statistics["bleu"].append(bleu)
 
         # save bleu to tensorboard
@@ -206,6 +210,8 @@ def one_epoch_dev(params, vocab, loader, model, optimizer, epoch, model_statisti
 
         # 对于验证阶段,我们保存所有得到的输出序列
         sentences_pred = []
+        sentences_pred_generate = []
+
         # 记录训练/验证的总样例数
         total_examples = 0
         # 记录训练/验证的总损失
@@ -214,7 +220,7 @@ def one_epoch_dev(params, vocab, loader, model, optimizer, epoch, model_statisti
         model_statistics["sampling_dev"][epoch] = []
 
         # store a list of output sentence for pred and gold
-        output_list = {"gold" : [], "pred" : []}
+        output_list = {"gold" : [], "pred" : [], "pred_generate" : []}
 
         # 每一个batch的训练/验证
         for batch_index, batch in enumerate(tqdm(loader)):
@@ -306,6 +312,16 @@ def one_epoch_dev(params, vocab, loader, model, optimizer, epoch, model_statisti
             total_examples += num_examples
             total_loss += loss.item() * num_examples
 
+            # generate mode
+            generator = Generator(params, model)
+            indices_pred, scores_pred = generator.generate_batch(input_indices, src_ans=answer_indices)
+
+            # 输出预测序列
+            for indices in indices_pred:
+                # indices[0]表示beam_size中分数最高的那个输出
+                sentence = vocab.convert_index2sentence(indices[0])
+                sentences_pred_generate.append(' '.join(sentence))
+
             # 如果参数中设置了打印模型损失,则打印模型损失
             if params.print_loss:
                 logger.info('Epoch : {}, batch : {}/{}, loss : {}'.format(epoch, batch_index, len(loader), loss))
@@ -318,13 +334,16 @@ def one_epoch_dev(params, vocab, loader, model, optimizer, epoch, model_statisti
                 answer = ' '.join(vocab.convert_index2sentence(answer, full=True))
             output_gold = ' '.join(vocab.convert_index2sentence(output_indices[-1]))
             output_pred = sentences_pred[-1]
+            output_pred_generate = sentences_pred_generate[-1]
 
-            if params.print_results:
+            if batch_index % 50 == 0:
                 logger.info('真实输入序列 : {}'.format(input_gold))
                 if torch.is_tensor(answer_indices):
                     logger.info('真实答案序列 : {}'.format(answer))
                 logger.info('真实输出序列 : {}'.format(output_gold))
                 logger.info('预测输出序列 : {}'.format(output_pred))
+                logger.info('generated : {}'.format(output_pred_generate))
+                logger.info("")
 
             if batch_index % model_statistics["sampling_frequency"] == 0:
                 sample = {
@@ -339,6 +358,7 @@ def one_epoch_dev(params, vocab, loader, model, optimizer, epoch, model_statisti
 
             output_list["gold"].append(output_gold)
             output_list["pred"].append(output_pred)
+            output_list["pred_generate"].append(output_pred_generate)
 
     # 计算总损失
     total_loss = total_loss / total_examples
@@ -490,12 +510,13 @@ def one_epoch_train(params, vocab, loader, model, optimizer, epoch, model_statis
         output_gold = ' '.join(vocab.convert_index2sentence(output_indices[-1]))
         output_pred = sentences_pred[-1]
 
-        if params.print_results:
+        if batch_index % 500 == 0:
             logger.info('真实输入序列 : {}'.format(input_gold))
             if torch.is_tensor(answer_indices):
                 logger.info('真实答案序列 : {}'.format(answer))
             logger.info('真实输出序列 : {}'.format(output_gold))
             logger.info('预测输出序列 : {}'.format(output_pred))
+            logger.info("")
 
         if batch_index % model_statistics["sampling_frequency"] == 0:
             sample = {
@@ -517,23 +538,14 @@ def one_epoch_train(params, vocab, loader, model, optimizer, epoch, model_statis
     return model, sentences_pred, total_loss, output_list
 
 # a wrapper for bleu eval to make result as a dict
-def eval(train_out_file, train_src_file, train_tgt_file,
-         dev_out_file, dev_src_file, dev_tgt_file,
-         isDIn = False, num_pairs = 500):
+def eval(mode, out_file, src_file, tgt_file, isDIn=False, num_pairs=500):
+    print("{}:".format(mode))
+    train_result = bleu_eval(out_file, src_file, tgt_file, isDIn, num_pairs)
 
-    print("train:")
-    train_result = bleu_eval(train_out_file, train_src_file, train_tgt_file, isDIn, num_pairs)
-    print("dev:")
-    dev_result = bleu_eval(dev_out_file, dev_src_file, dev_tgt_file, isDIn, num_pairs)
-
-    ret = {"train_Bleu_1" : train_result[0] * 100,
-           "train_Bleu_2" : train_result[1] * 100,
-           "train_Bleu_3" : train_result[2] * 100,
-           "train_Bleu_4" : train_result[3] * 100,
-           "dev_Bleu_1": dev_result[0] * 100,
-           "dev_Bleu_2": dev_result[1] * 100,
-           "dev_Bleu_3": dev_result[2] * 100,
-           "dev_Bleu_4": dev_result[3] * 100,
+    ret = {"{}_Bleu_1".format(mode) : train_result[0] * 100,
+           "{}_Bleu_2".format(mode) : train_result[1] * 100,
+           "{}_Bleu_3".format(mode) : train_result[2] * 100,
+           "{}_Bleu_4".format(mode) : train_result[3] * 100,
            }
 
     return ret
