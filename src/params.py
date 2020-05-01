@@ -138,6 +138,7 @@ def params():
         if params.cuda and torch.cuda.is_available():
             params.cuda = True
             params.device = torch.device('cuda')
+            params.num_workers = 4
         else:
             params.cuda = False
             params.device = torch.device('cpu')

@@ -24,11 +24,50 @@ from tqdm import tqdm
 from logger import logger
 from params import params
 from vocab import Vocab
-from dataset import Dataset, collate_fn
+from dataset import Dataset
 from optimizer import Optimizer
 from torch.utils.tensorboard import SummaryWriter
 from eval import eval as bleu_eval
 from beam import Generator
+from torch.nn.utils.rnn import pad_sequence
+
+
+class Sample:
+    def __init__(self, batch):
+        input_indices, output_indices, answers_indices, vocab = zip(*batch)
+
+        # input
+        self.inputs_lens = [len(x) for x in input_indices]
+        self.inputs = pad_sequence([torch.tensor(x) for x in input_indices], batch_first=True)
+
+        # output/target
+        outputs_text = [torch.tensor(text[:-1]) for text in output_indices]
+        targets_text = [torch.tensor(text[1:]) for text in output_indices]
+
+        self.outputs_lens = [y.size(0) for y in outputs_text]
+        self.targets_lens = [y.size(0) for y in targets_text]
+
+        self.outputs = pad_sequence(outputs_text, batch_first=True)
+        self.targets = pad_sequence(targets_text, batch_first=True)
+
+        # answer
+        self.answers = torch.zeros_like(self.inputs)
+
+        for index, single_data in enumerate(answers_indices):
+            answer = single_data
+            # shift by 1
+            answer_start = answer[0] + 1
+            answer_end = answer[1] + 1
+            self.answers[index][answer_start: answer_end] = 1
+
+    def pin_memory(self):
+        self.inputs = self.inputs.pin_memory()
+        self.outputs = self.outputs.pin_memory()
+        self.targets = self.targets.pin_memory()
+        return self
+
+def collate_fn(batch):
+    return Sample(batch)
 
 def prepare_dataloaders(params, data):
     '''
@@ -223,14 +262,15 @@ def one_epoch_dev(params, vocab, loader, model, optimizer, epoch, model_statisti
         output_list = {"gold" : [], "pred" : [], "pred_generate" : []}
 
         # 每一个batch的训练/验证
-        for batch_index, batch in enumerate(tqdm(loader)):
+        for batch_index, sample in enumerate(tqdm(loader)):
             # 从数据中读取模型的输入和输出
-            input_indices = batch[0].to(params.device)
-            output_indices = batch[1].to(params.device)
-            if torch.is_tensor(batch[2]):
-                answer_indices = batch[2].to(params.device)
-            else:
-                answer_indices = None
+            inputs, inputs_lens = sample.inputs, sample.inputs_lens
+            outputs, outputs_lens = sample.outputs, sample.outputs_lens
+            targets, targets_lens = sample.targets, sample.targets_lens
+            answers = sample.answers
+
+            inputs, outputs, targets, answers = inputs.to(params.device), outputs.to(params.device), \
+                                                targets.to(params.device), answers.to(params.device)
             # input_indices: [batch_size, input_seq_len]
             # output_indices: [batch_size, output_seq_len]
             # answer_indices: [batch_size, output_seq_len]
@@ -242,11 +282,13 @@ def one_epoch_dev(params, vocab, loader, model, optimizer, epoch, model_statisti
             # 真实输出是在原始数据的基础上"去头"(decoder部分的输出)
             # 原始数据: <s> 1 2 3 </s>
             # 真实输出: 1 2 3 </s>
-            output_indices_gold = output_indices[:, 1:]
+            output_indices_gold = targets
             # 模型输入是在原始数据的基础上"去尾"(decoder部分的输入)
             # 原始数据: <s> 1 2 3 </s>
             # 真实输出: <s> 1 2 3
-            output_indices = output_indices[:, :-1]
+            output_indices = outputs
+            input_indices = inputs
+            answer_indices = answers
 
             # 将输入数据导入模型,得到预测的输出数据
             output_indices_pred = model(input_indices, output_indices, answer_indices=answer_indices)
@@ -363,6 +405,8 @@ def one_epoch_dev(params, vocab, loader, model, optimizer, epoch, model_statisti
     # 计算总损失
     total_loss = total_loss / total_examples
 
+    logger.info("dev loss: {}".format(total_loss))
+
     return model, sentences_pred, total_loss, output_list
 
 def one_epoch_train(params, vocab, loader, model, optimizer, epoch, model_statistics):
@@ -403,14 +447,15 @@ def one_epoch_train(params, vocab, loader, model, optimizer, epoch, model_statis
     output_list = {"gold" : [], "pred" : []}
 
     # 每一个batch的训练/验证
-    for batch_index, batch in enumerate(tqdm(loader)):
+    for batch_index, sample in enumerate(tqdm(loader)):
         # 从数据中读取模型的输入和输出
-        input_indices = batch[0].to(params.device)
-        output_indices = batch[1].to(params.device)
-        if torch.is_tensor(batch[2]):
-            answer_indices = batch[2].to(params.device)
-        else:
-            answer_indices = None
+        inputs, inputs_lens = sample.inputs, sample.inputs_lens
+        outputs, outputs_lens = sample.outputs, sample.outputs_lens
+        targets, targets_lens = sample.targets, sample.targets_lens
+        answers = sample.answers
+
+        inputs, outputs, targets, answers = inputs.to(params.device), outputs.to(params.device), \
+                                            targets.to(params.device), answers.to(params.device)
         # input_indices: [batch_size, input_seq_len]
         # output_indices: [batch_size, output_seq_len]
         # answer_indices: [batch_size, output_seq_len]
@@ -422,11 +467,13 @@ def one_epoch_train(params, vocab, loader, model, optimizer, epoch, model_statis
         # 真实输出是在原始数据的基础上"去头"(decoder部分的输出)
         # 原始数据: <s> 1 2 3 </s>
         # 真实输出: 1 2 3 </s>
-        output_indices_gold = output_indices[:, 1:]
+        output_indices_gold = targets
         # 模型输入是在原始数据的基础上"去尾"(decoder部分的输入)
         # 原始数据: <s> 1 2 3 </s>
         # 真实输出: <s> 1 2 3
-        output_indices = output_indices[:, :-1]
+        output_indices = outputs
+        input_indices = inputs
+        answer_indices = answers
 
         # 将输入数据导入模型,得到预测的输出数据
         output_indices_pred = model(input_indices, output_indices, answer_indices=answer_indices)
@@ -534,6 +581,8 @@ def one_epoch_train(params, vocab, loader, model, optimizer, epoch, model_statis
 
     # 计算总损失
     total_loss = total_loss / total_examples
+
+    logger.info("train loss: {}".format(total_loss))
 
     return model, sentences_pred, total_loss, output_list
 
