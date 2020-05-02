@@ -19,46 +19,9 @@ from tqdm import tqdm
 from logger import logger
 from params import params
 from vocab import Vocab
-from dataset import Dataset
+from dataset import Dataset, collate_fn
 from beam import Generator
 from torch.nn.utils.rnn import pad_sequence
-
-class Sample:
-    def __init__(self, batch):
-        input_indices, output_indices, answers_indices, vocab = zip(*batch)
-
-        # input
-        self.inputs_lens = [len(x) for x in input_indices]
-        self.inputs = pad_sequence([torch.tensor(x) for x in input_indices], batch_first=True)
-
-        # output/target
-        outputs_text = [torch.tensor(text[:-1]) for text in output_indices]
-        targets_text = [torch.tensor(text[1:]) for text in output_indices]
-
-        self.outputs_lens = [y.size(0) for y in outputs_text]
-        self.targets_lens = [y.size(0) for y in targets_text]
-
-        self.outputs = pad_sequence(outputs_text, batch_first=True)
-        self.targets = pad_sequence(targets_text, batch_first=True)
-
-        # answer
-        self.answers = torch.zeros_like(self.inputs)
-
-        for index, single_data in enumerate(answers_indices):
-            answer = single_data
-            # shift by 1
-            answer_start = answer[0] + 1
-            answer_end = answer[1] + 1
-            self.answers[index][answer_start: answer_end] = 1
-
-    def pin_memory(self):
-        self.inputs = self.inputs.pin_memory()
-        self.outputs = self.outputs.pin_memory()
-        self.targets = self.targets.pin_memory()
-        return self
-
-def collate_fn(batch):
-    return Sample(batch)
 
 def prepare_dataloaders(params, data):
     '''
@@ -169,24 +132,29 @@ def one_epoch(params, vocab, loader, model):
         # 每一个batch的测试
         for batch_index, sample in enumerate(tqdm(loader)):
             # 从数据中读取模型的输入和输出
-            inputs, inputs_lens = sample.inputs, sample.inputs_lens
+            inputs, inputs_lens, inputs_segments = \
+                sample.inputs, sample.inputs_lens, sample.input_segment_indices
             outputs, outputs_lens = sample.outputs, sample.outputs_lens
             targets, targets_lens = sample.targets, sample.targets_lens
-            answers = sample.answers
 
-            inputs, outputs, targets, answers = inputs.to(params.device), outputs.to(params.device), \
-                                                targets.to(params.device), answers.to(params.device)
-            # input_indices: [batch_size, input_seq_len]
-            # output_indices: [batch_size, output_seq_len]
-            # answer_indices: [batch_size, output_seq_len]
+            inputs, inputs_segments, outputs, targets = \
+                inputs.to(params.device), inputs_segments.to(params.device), \
+                outputs.to(params.device), targets.to(params.device)
+
+            # inputs: [batch_size, input_seq_len]
+            # inputs_segments: [batch_size, input_seq_len]
+            # outputs: [batch_size, output_seq_len-1]
+            # targets: [batch_size, output_seq_len-1]
 
             output_indices = outputs
             input_indices = inputs
-            answer_indices = answers
+            answer_indices = None
 
             # 使用beam_search算法,以<s>作为开始符得到完整的预测序列
             generator = Generator(params, model)
-            indices_pred, scores_pred = generator.generate_batch(input_indices, src_ans=answer_indices)
+            indices_pred, scores_pred = generator.generate_batch(input_indices,
+                                                                 input_segment_indices=inputs_segments,
+                                                                 src_ans=answer_indices)
             # indices_pred: [batch_size, beam_size, output_seq_len]
 
             # 输出预测序列

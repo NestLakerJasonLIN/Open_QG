@@ -6,11 +6,8 @@
 (2)根据文本数据构造vocab
 (3)根据vocab将数据从文本形式转换为索引形式
 '''
-__author__ = 'qjzhzw'
+__author__ = 'yanwenl'
 
-import json
-import os
-import random
 import torch
 
 from logger import logger
@@ -19,89 +16,36 @@ from vocab import Vocab
 
 
 def load_dataset(params, origin_file):
-    '''
-    作用:
-    从txt形式的文件中读取模型需要使用的文本数据,转换为list形式
-
-    输入参数:
-    params: 参数集合
-    origin_file: 输入的原始文件
-
-    输出参数:
-    sentences: 输入文件的每个句子切分过后每个token组成二维list
-    '''
-
     # 将原始数据加载进来
     instances = open(origin_file, 'r').readlines()
 
     # 依次处理所有数据
     sentences = []
     for instance in instances:
-        # 将str切分为list,过长的句子需要截短
-        words = instance.strip().split()
-        words = words[:params.max_seq_len]
-
-        # 每个输入句子需要加入起止标志符<s>和</s>
-        sentence = ['<s>'] + words + ['</s>']
+        sentence = instance.strip().split()
         sentences.append(sentence)
     
-    logger.info('从{}中成功加载数据{}'.format(origin_file, len(sentences)))
+    logger.info('{} load: {}'.format(origin_file, len(sentences)))
 
     return sentences
 
-
-def load_answer(answer_start_file, answer_end_file):
-    '''
-    作用:
-    从txt形式的文件中读取模型需要使用的文本数据(答案),转换为list形式
-
-    输入参数:
-    answer_start_file: 输出的答案开始位置文件
-    answer_end_file: 输出的答案开始位置文件
-
-    输出参数:
-    answers: 每个答案开始/结束位置组成二维list
-    '''
-
-    # 将原始数据加载进来
-    answer_starts = open(answer_start_file, 'r').readlines()
-    answer_ends = open(answer_end_file, 'r').readlines()
-
-    # 需要保证[答案开始位置/答案结束位置]数量一致
-    assert len(answer_starts) == len(answer_ends)
-    len_answer = len(answer_starts)
-
-    # 依次处理所有数据
+def load_answer(answer_file, input_sentences):
+    instances = open(answer_file, 'r').readlines()
     answers = []
-    for i in range(len_answer):
-        # 读取答案开始和结束位置
-        answer_start = int(answer_starts[i].strip())
-        answer_end = int(answer_ends[i].strip())
+    assert len(instances) == len(input_sentences)
 
-        # 将[答案开始位置,答案结束位置]组成list
-        answer = [answer_start, answer_end]
-        answers.append(answer)
-    
-    logger.info('从{}和{}中成功加载数据{}'.format(answer_start_file, answer_end_file, len(answers)))
+    # answer should appear in input sentence
+    for idx, answer in enumerate(instances):
+        answer = answer.strip()
+        assert answer in " ".join(input_sentences[idx]), "ans: " + answer + " text: " + " ".join(input_sentences[idx])
+        answers.append(answer.split())
+
+    logger.info('{} load answer: {}'.format(answer_file, len(answers)))
 
     return answers
 
-
 def build_vocab(params, vocab_file, sentences):
-    '''
-    作用:
-    根据文本数据构造vocab
-
-    输入参数:
-    params: 参数集合
-    vocab_file: vocab文件所在位置
-    sentences: 输入所有样本
-
-    输出参数:
-    vocab: 输出Vocab类,其中包含了数据集中的所有单词
-    '''
-
-    logger.info('正在构造vocab')
+    logger.info('building vocab')
 
     # 统计词频
     word_freq = {}
@@ -155,41 +99,6 @@ def build_vocab(params, vocab_file, sentences):
 
     return vocab
 
-
-def load_vocab(params, vocab_file):
-    '''
-    作用:
-    从预先设定好的vocab文件中加载vocab
-
-    输入参数:
-    params: 参数集合
-    vocab_file: vocab文件所在位置
-
-    输出参数:
-    vocab: 输出Vocab类,其中包含了数据集中的所有单词
-    '''
-
-    logger.info('正在加载vocab')
-
-    # 从已保存的vocab文件中读取vocab
-    vocab_file = open(vocab_file, 'r')
-    vocab = Vocab(params)
-
-    # 逐行导入vocab元素
-    for line in vocab_file:
-        line = line.split()
-        word = line[0]
-        index = int(line[1])
-        freq = line[2]
-        embedding = line[3:]
-        if not vocab.has_word(word):
-            vocab.add_element(word, index, freq, embedding)
-
-    logger.info('加载的vocab大小为{}'.format(len(vocab)))
-
-    return vocab
-
-
 def convert_sentence2index(sentences, vocab):
     '''
     作用:
@@ -229,26 +138,21 @@ if __name__ == '__main__':
     dev_output_sentences = load_dataset(params, params.dev_question_file)
     test_input_sentences = load_dataset(params, params.test_sentence_file)
     test_output_sentences = load_dataset(params, params.test_question_file)
-    train_answers = dev_answers = test_answers = None
-    if params.answer_embeddings:
-        train_answers = load_answer(params.train_answer_start_file, params.train_answer_end_file)
-        dev_answers = load_answer(params.dev_answer_start_file, params.dev_answer_end_file)
-        test_answers = load_answer(params.test_answer_start_file, params.test_answer_end_file)
+
+    train_answers = load_answer(params.train_answer_file, train_input_sentences)
+    dev_answers = load_answer(params.dev_answer_file, dev_input_sentences)
+    test_answers = load_answer(params.test_answer_file, test_input_sentences)
 
     # 断言:[句子/问题/答案]数量一致
     assert len(train_input_sentences) == len(train_output_sentences) 
     assert len(dev_input_sentences) == len(dev_output_sentences)
     assert len(test_input_sentences) == len(test_output_sentences)
-    if params.answer_embeddings:
-        assert len(train_input_sentences) == len(train_answers)
-        assert len(dev_input_sentences) == len(dev_answers)
-        assert len(test_input_sentences) == len(test_answers)
+    assert len(train_input_sentences) == len(train_answers)
+    assert len(dev_input_sentences) == len(dev_answers)
+    assert len(test_input_sentences) == len(test_answers)
 
     # 加载/构造vocab
-    if params.load_vocab and os.path.exists(params.vocab_file):
-        vocab = load_vocab(params, params.vocab_file)
-    else:
-        vocab = build_vocab(params, params.vocab_file,
+    vocab = build_vocab(params, params.vocab_file,
                             train_input_sentences + \
                             train_output_sentences + \
                             dev_input_sentences + \
@@ -262,6 +166,10 @@ if __name__ == '__main__':
     test_input_indices = convert_sentence2index(test_input_sentences, vocab)
     test_output_indices = convert_sentence2index(test_output_sentences, vocab)
 
+    train_answer_indices = convert_sentence2index(train_answers, vocab)
+    dev_answer_indices = convert_sentence2index(dev_answers, vocab)
+    test_answer_indices = convert_sentence2index(test_answers, vocab)
+
     logger.info('正在将数据中的单词转换为索引')
 
     # 构造数据,输出到临时的pt文件中
@@ -270,13 +178,13 @@ if __name__ == '__main__':
         'vocab' : vocab,
         'train_input_indices' : train_input_indices,
         'train_output_indices' : train_output_indices,
-        'train_answers' : train_answers,
+        'train_answer_indices' : train_answer_indices,
         'dev_input_indices' : dev_input_indices,
         'dev_output_indices' : dev_output_indices,
-        'dev_answers' : dev_answers,
+        'dev_answer_indices' : dev_answer_indices,
         'test_input_indices' : test_input_indices,
         'test_output_indices' : test_output_indices,
-        'test_answers' : test_answers
+        'test_answer_indices' : test_answer_indices
     }
 
     model_statistics = {

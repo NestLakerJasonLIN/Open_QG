@@ -19,7 +19,7 @@ class Generator(object):
         self.params = params
         self.model = model    
 
-    def generate_batch(self, src_seq, src_ans=None):
+    def generate_batch(self, src_seq, input_segment_indices, src_ans=None):
         ''' Translation work in one batch '''
 
         def get_inst_idx_to_tensor_position_map(inst_idx_list):
@@ -109,7 +109,9 @@ class Generator(object):
 
         with torch.no_grad():
             #-- Encode
-            src_enc = self.model.encoder(src_seq, src_ans)
+            src_enc = self.model.encoder(src_seq,
+                                         segment_input_indices=input_segment_indices,
+                                         answer_indices=src_ans)
 
             #-- Repeat data for beam search
             n_bm = self.params.beam_size # beam_size

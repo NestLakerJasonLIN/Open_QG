@@ -37,7 +37,7 @@ class Model(nn.Module):
             self.decoder.position_embedding_decoder = self.encoder.position_embedding_encoder
             self.decoder.output.weight = self.decoder.word_embedding_decoder.weight
 
-    def forward(self, input_indices, output_indices, answer_indices=None):
+    def forward(self, input_indices, output_indices, input_segment_indices=None, answer_indices=None):
         '''
         输入参数:
         input_indices: [batch_size, input_seq_len]
@@ -48,7 +48,7 @@ class Model(nn.Module):
         output_indices: [batch_size, output_seq_len, vocab_size]
         '''
 
-        encoder_hiddens = self.encoder(input_indices, answer_indices)
+        encoder_hiddens = self.encoder(input_indices, input_segment_indices, answer_indices)
         output_indices = self.decoder(output_indices, input_indices, encoder_hiddens)
 
         return output_indices
@@ -75,8 +75,8 @@ class Encoder(nn.Module):
 
         # embedding层,将索引/位置信息转换为词向量
         self.word_embedding_encoder = nn.Embedding(self.vocab_size, self.params.d_model)
-        self.position_embedding_encoder = nn.Embedding(self.params.max_seq_len+2, self.params.d_model)
-        self.answer_embedding_encoder = nn.Embedding(2, self.params.d_model)
+        self.position_embedding_encoder = nn.Embedding(88, self.params.d_model) # TODO: should not hardcode
+        self.segment_embedding_encoder = nn.Embedding(3, self.params.d_model) # {seg1, seg2, pad}
 
         # 如果有预训练的词向量,则使用预训练的词向量进行权重初始化
         if self.params.load_embeddings:
@@ -86,7 +86,7 @@ class Encoder(nn.Module):
         # 多个相同子结构组成的encoder子层,层数为num_layers
         self.encoder_layers = nn.ModuleList([Encoder_layer(self.params) for _ in range(self.params.num_layers)])
 
-    def forward(self, input_indices, answer_indices=None):
+    def forward(self, input_indices, input_segment_indices, answer_indices=None):
         '''
         输入参数:
         input_indices: [batch_size, input_seq_len]
@@ -95,6 +95,7 @@ class Encoder(nn.Module):
         输出参数:
         input_indices: [batch_size, input_seq_len]
         '''
+        assert input_indices.shape == input_segment_indices.shape
 
         # 构造掩膜和位置信息
         input_indices_positions = self.utils.build_positions(input_indices)
@@ -102,16 +103,20 @@ class Encoder(nn.Module):
         # input_indices_positions: [batch_size, input_seq_len]
         # encoder_self_attention_masks: [batch_size, input_seq_len, input_seq_len]
 
-        # 将索引/位置信息转换为词向量
+        # position embedding
+        input_word_emb = self.word_embedding_encoder(input_indices)
+
+        # position embedding
         input_positions = torch.arange(input_indices.size(1)).repeat(input_indices.size(0), 1).to(self.params.device)
         assert input_indices.shape == input_positions.shape
         input_pos_emb = self.position_embedding_encoder(input_positions)
-        input_indices = self.word_embedding_encoder(input_indices) * np.sqrt(self.params.d_model) + input_pos_emb
-        # input_indices: [batch_size, input_seq_len, d_model]
 
-        # 如果有答案信息,就转换为词向量
-        if torch.is_tensor(answer_indices):
-            input_indices += self.answer_embedding_encoder(answer_indices)
+        # segment embedding
+        input_seg_emb = self.segment_embedding_encoder(input_segment_indices)
+
+        input_indices = input_word_emb + input_pos_emb + input_seg_emb
+
+        # input_indices: [batch_size, input_seq_len, d_model]
 
         # 经过多个相同子结构组成的decoder子层,层数为num_layers
         for encoder_layer in self.encoder_layers:

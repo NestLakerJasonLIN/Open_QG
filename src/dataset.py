@@ -9,6 +9,7 @@ __author__ = 'qjzhzw'
 import numpy as np
 import torch
 import torch.utils.data
+from torch.nn.utils.rnn import pad_sequence
 
 
 class Dataset(torch.utils.data.Dataset):
@@ -31,13 +32,13 @@ class Dataset(torch.utils.data.Dataset):
         self.vocab = data['vocab']
         self.train_input_indices = data['train_input_indices']
         self.train_output_indices = data['train_output_indices']
-        self.train_answers = data['train_answers']
+        self.train_answer_indices = data['train_answer_indices']
         self.dev_input_indices = data['dev_input_indices']
         self.dev_output_indices = data['dev_output_indices']
-        self.dev_answers = data['dev_answers']
+        self.dev_answer_indices = data['dev_answer_indices']
         self.test_input_indices = data['test_input_indices']
         self.test_output_indices = data['test_output_indices']
-        self.test_answers = data['test_answers']
+        self.test_answer_indices = data['test_answer_indices']
 
         # 断言: mode值一定在['train', 'dev', 'test']范围内
         assert self.mode in ['train', 'dev', 'test', 'test_on_train']
@@ -46,10 +47,9 @@ class Dataset(torch.utils.data.Dataset):
         assert len(self.train_input_indices) == len(self.train_output_indices)
         assert len(self.dev_input_indices) == len(self.dev_output_indices)
         assert len(self.test_input_indices) == len(self.test_output_indices)
-        if self.params.answer_embeddings:
-            assert len(self.train_input_indices) == len(self.train_answers)
-            assert len(self.dev_input_indices) == len(self.dev_answers)
-            assert len(self.test_input_indices) == len(self.test_answers)
+        assert len(self.train_input_indices) == len(self.train_answer_indices)
+        assert len(self.dev_input_indices) == len(self.dev_answer_indices)
+        assert len(self.test_input_indices) == len(self.test_answer_indices)
 
     def __getitem__(self, index):
         '''
@@ -71,22 +71,22 @@ class Dataset(torch.utils.data.Dataset):
         if self.mode == 'train':
             return self.train_input_indices[index], \
                    self.train_output_indices[index], \
-                   self.train_answers[index] if self.train_answers else None, \
+                   self.train_answer_indices[index] if self.train_answer_indices else None, \
                    self.vocab
         elif self.mode == 'dev':
             return self.dev_input_indices[index], \
                    self.dev_output_indices[index], \
-                   self.dev_answers[index] if self.dev_answers else None, \
+                   self.dev_answer_indices[index] if self.dev_answer_indices else None, \
                    self.vocab
         elif self.mode == 'test':
             return self.test_input_indices[index], \
                    self.test_output_indices[index], \
-                   self.test_answers[index] if self.test_answers else None, \
+                   self.test_answer_indices[index] if self.test_answer_indices else None, \
                    self.vocab
         elif self.mode == 'test_on_train':
             return self.train_input_indices[index], \
                    self.train_output_indices[index], \
-                   self.train_answers[index] if self.train_answers else None, \
+                   self.train_answer_indices[index] if self.train_answer_indices else None, \
                    self.vocab
 
     def __len__(self):
@@ -108,88 +108,39 @@ class Dataset(torch.utils.data.Dataset):
         elif self.mode == 'test_on_train':
             return len(self.test_input_indices)
 
-def collate_fn(data):
-    '''
-    作用:
-    构造batch
+class Sample:
+    def __init__(self, batch):
+        input_indices, question_indices, answer_indices, vocab = zip(*batch)
+        vocab = vocab[0]
 
-    输入参数:
-    data: 输入的数据(即上面的__getitem__传下来的),原始的一个batch的内容
-          是一个二维list,第一维是batch_size,第二维是batch中每个句子(不等长)
+        compose_input_indices = [[vocab.word2index['<cls>']] + input_indices[i] + [vocab.word2index['<sep>']] + \
+                                 answer_indices[i] + [vocab.word2index['<sep>']] for i in range(len(input_indices))]
 
-    输出参数:
-    batch_input: 输入序列的batch
-    batch_output: 输出序列的batch
-    batch_answer: 答案的batch
-    '''
+        # input
+        self.inputs_lens = [len(x) for x in compose_input_indices]
+        self.inputs = pad_sequence([torch.tensor(x) for x in compose_input_indices], batch_first=True)
+        self.input_segment_indices = torch.tensor([[0] * (1 + len(input_indices[i]) + 1) +
+                                                   [1] * (len(answer_indices[i]) + 1) +
+                                                   [2] * (self.inputs[i].size(0) - self.inputs_lens[i])
+                                                   for i in range(len(input_indices))])
 
-    # 对模型的[输入序列/输出序列/答案]分别构造batch
-    batch_input = get_batch(data, mode=0)
-    batch_output = get_batch(data, mode=1)
+        # output/target
+        question_indices = [[vocab.word2index['<s>']] + question_idx + [vocab.word2index['</s>']]
+                            for question_idx in question_indices]
+        outputs_text = [torch.tensor(text[:-1]) for text in question_indices]
+        targets_text = [torch.tensor(text[1:]) for text in question_indices]
 
-    # 如果答案部分不存在,则返回的batch_answer为None
-    batch_answer = get_batch(data, mode=2, batch_input=batch_input)
+        self.outputs_lens = [y.size(0) for y in outputs_text]
+        self.targets_lens = [y.size(0) for y in targets_text]
 
-    return batch_input, batch_output, batch_answer
+        self.outputs = pad_sequence(outputs_text, batch_first=True)
+        self.targets = pad_sequence(targets_text, batch_first=True)
 
+    def pin_memory(self):
+        self.inputs = self.inputs.pin_memory()
+        self.outputs = self.outputs.pin_memory()
+        self.targets = self.targets.pin_memory()
+        return self
 
-def get_batch(data, mode=0, batch_input=None):
-    '''
-    作用:
-    构造batch
-
-    输入参数:
-    data: 输入的数据(即上面的__getitem__传下来的),原始的一个batch的内容
-          是一个二维list,第一维是batch_size,第二维是batch中每个句子(不等长)
-    mode: 0表示是输入序列
-          1表示是输出序列
-          2表示是答案
-    batch_input: 在构造答案时需要构造一个大小和输入序列完全一样的tensor,然后根据答案位置填0和1
-
-    输出参数:
-    batch: 构造好的batch
-    '''
-
-    # 断言: mode值一定在[0, 1, 2]范围内
-    assert mode in [0, 1, 2]
-
-    # 输入序列/输出序列的处理方式
-    if mode == 0 or mode == 1:
-        # 获得该batch中的最大句长
-        max_len = 0
-        # 这里的single_data是上面的__getitem__传下来的,原始的一个batch的内容
-        # 获得single_data以后,要通过索引的方式获取其中每个需要的部分
-        # 例如single_data[0]是输入序列,single_data[1]是输出序列
-        for single_data in data:
-            sentence = single_data[mode]
-            if len(sentence) > max_len:
-                max_len = len(sentence)
-
-        # 构造batch,不足的部分用<pad>对应的索引填充
-        batch = []
-        for single_data in data:
-            sentence = single_data[mode]
-            vocab = single_data[-1]
-            batch_sentence = sentence + [vocab.word2index['<pad>']] * (max_len - len(sentence))
-            batch.append(batch_sentence)
-
-        # 将二维list的batch直接转换为tensor的形式
-        batch = torch.tensor(batch)
-
-    elif mode == 2:
-        # 如果答案部分不为空,对答案部分构造batch,否则返回None
-        if data[0][mode] != None:
-            # 在构造答案时需要构造一个大小和输入序列完全一样的tensor
-            batch = torch.zeros_like(batch_input)
-
-            # 构造batch,然后根据答案位置填0和1
-            for index, single_data in enumerate(data):
-                answer = single_data[mode]
-                # 因为输入序列有<s>作为起始符,因此真实答案位置需要后移一位
-                answer_start = answer[0] + 1
-                answer_end = answer[1] + 1
-                batch[index][answer_start : answer_end] = 1
-        else:
-            return None
-
-    return batch
+def collate_fn(batch):
+    return Sample(batch)
