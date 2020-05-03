@@ -110,7 +110,7 @@ class Generator(object):
         with torch.no_grad():
             #-- Encode
             src_enc = self.model.encoder(src_seq,
-                                         segment_input_indices=input_segment_indices,
+                                         input_segment_indices=input_segment_indices,
                                          answer_indices=src_ans)
 
             #-- Repeat data for beam search

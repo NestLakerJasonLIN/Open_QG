@@ -41,9 +41,10 @@ def load_dataset(params, origin_file, sentence_file, question_file, answer_file)
         answer = answer.split()
 
         # clip sentences with too long length
-        if (params.max_seq_len < len(sentence)):
+        if (params.max_seq_len < len(sentence) or params.max_seq_len < len(question)):
             clipped_num += 1
         sentence = sentence[:params.max_seq_len]
+        question = question[:params.max_seq_len]
 
         # drop sentence that does not contain answer
         answer_start = 0

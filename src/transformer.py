@@ -149,6 +149,7 @@ class Decoder(nn.Module):
         # embedding层,将索引/位置信息转换为词向量
         self.word_embedding_decoder = nn.Embedding(self.vocab_size, self.params.d_model)
         self.position_embedding_decoder = nn.Embedding(self.params.max_seq_len+2, self.params.d_model)
+        self.segment_embedding_decoder = nn.Embedding(2, self.params.d_model) # TODO: maybe share with encoder
 
         # 如果有预训练的词向量,则使用预训练的词向量进行权重初始化
         if self.params.load_embeddings:
@@ -188,7 +189,9 @@ class Decoder(nn.Module):
         output_positions = torch.arange(output_indices.size(1)).repeat(output_indices.size(0), 1).to(self.params.device)
         assert output_indices.shape == output_positions.shape
         output_pos_emb = self.position_embedding_decoder(output_positions)
-        output_indices = self.word_embedding_decoder(output_indices) * np.sqrt(self.params.d_model) + output_pos_emb
+        output_seg_emb = self.segment_embedding_decoder(torch.ones(output_indices.shape).type(torch.LongTensor).to(self.params.device))
+        output_word_emb = self.word_embedding_decoder(output_indices)
+        output_indices = output_word_emb + output_pos_emb + output_seg_emb
         # output_indices: [batch_size, output_seq_len, d_model]
 
         # 经过多个相同子结构组成的decoder子层,层数为num_layers
